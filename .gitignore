@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Environment variables
+.env
+
 # Model files (download with: pnpm model)
 public/models/
 
