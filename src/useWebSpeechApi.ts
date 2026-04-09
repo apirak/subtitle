@@ -33,9 +33,9 @@ export function useWebSpeechApi() {
   const [subtitles, setSubtitles] = useState<SubtitleLine[]>([]);
   const [loadProgress, setLoadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
-  const [language, setLanguage] = useState('');
-  const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null);
-  const languageRef = useRef('');
+  const [language, setLanguage] = useState('en-US');
+  const [detectedLanguage] = useState<string | null>(null);
+  const languageRef = useRef('en-US');
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const stoppingRef = useRef(false);
@@ -156,10 +156,11 @@ export function useWebSpeechApi() {
     setStatus('idle');
   }, []);
 
-  const updateLanguage = useCallback((lang: string) => {
-    console.log('[webspeech] updateLanguage:', lang || 'auto');
-    setLanguage(lang);
-    languageRef.current = lang;
+  const updateLanguage = useCallback((lang: string | null) => {
+    const value = lang ?? '';
+    console.log('[webspeech] updateLanguage:', value || 'auto');
+    setLanguage(value);
+    languageRef.current = value;
     // Restart recognition with new language if currently listening
     if (recognitionRef.current) {
       const recognition = recognitionRef.current;

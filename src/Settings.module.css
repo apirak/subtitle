@@ -1,0 +1,119 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transition: background 0.3s ease;
+  pointer-events: none;
+}
+
+.overlayOpen {
+  background: rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+}
+
+.panel {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(28, 28, 30, 0.95);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border-radius: 20px 20px 0 0;
+  padding: 0 0 40px;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.panelOpen {
+  transform: translateY(0);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 12px;
+}
+
+.panelTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.closeButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 8px 24px 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hint {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+/* ── Slider ── */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.3);
+}
+
+.sliderLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.2);
+}

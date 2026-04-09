@@ -19,6 +19,7 @@ export interface SubtitleLine {
   id: string;
   text: string;
   timestamp: number;
+  translation?: string;
 }
 
 export interface SpeechRecognitionEvent {
