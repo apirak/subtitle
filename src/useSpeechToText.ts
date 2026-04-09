@@ -5,6 +5,24 @@ const CHUNK_DURATION_S = 3;
 const TARGET_SAMPLE_RATE = 16000;
 const MAX_SUBTITLES = 12;
 
+export const LANGUAGES = [
+  { code: null, label: 'Auto-detect' },
+  { code: 'en', label: 'English' },
+  { code: 'th', label: 'ไทย' },
+  { code: 'zh', label: '中文' },
+  { code: 'ja', label: '日本語' },
+  { code: 'ko', label: '한국어' },
+  { code: 'es', label: 'Español' },
+  { code: 'fr', label: 'Français' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'pt', label: 'Português' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'ar', label: 'العربية' },
+  { code: 'hi', label: 'हिन्दी' },
+  { code: 'vi', label: 'Tiếng Việt' },
+  { code: 'id', label: 'Bahasa Indonesia' },
+] as const;
+
 function resample(audioData: Float32Array, fromRate: number, toRate: number): Float32Array {
   if (fromRate === toRate) return audioData;
   const ratio = fromRate / toRate;
@@ -24,6 +42,10 @@ export function useSpeechToText() {
   const [status, setStatus] = useState<AppStatus>('idle');
   const [subtitles, setSubtitles] = useState<SubtitleLine[]>([]);
   const [loadProgress, setLoadProgress] = useState(0);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [language, setLanguage] = useState<string | null>(null);
+  const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null);
+  const languageRef = useRef<string | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -54,7 +76,7 @@ export function useSpeechToText() {
     const nativeSampleRate = audioCtx?.sampleRate ?? TARGET_SAMPLE_RATE;
     const resampled = resample(merged, nativeSampleRate, TARGET_SAMPLE_RATE);
 
-    workerRef.current.postMessage({ type: 'transcribe', audio: resampled });
+    workerRef.current.postMessage({ type: 'transcribe', audio: resampled, language: languageRef.current });
   }, []);
 
   const handleWorkerMessage = useCallback((e: MessageEvent<WorkerToMainMessage>) => {
@@ -70,6 +92,7 @@ export function useSpeechToText() {
       case 'processing':
         break;
       case 'result':
+        if (msg.language) setDetectedLanguage(msg.language);
         setSubtitles((prev) => {
           const next = [
             ...prev,
@@ -81,6 +104,7 @@ export function useSpeechToText() {
         break;
       case 'error':
         console.error('Worker error:', msg.message);
+        setErrorMessage(msg.message);
         setStatus('error');
         break;
     }
@@ -88,18 +112,31 @@ export function useSpeechToText() {
 
   const startSession = useCallback(async () => {
     try {
-      setStatus('loading');
       setLoadProgress(0);
       setSubtitles([]);
-      isReadyRef.current = false;
 
-      // Create worker
-      const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
-      worker.addEventListener('message', handleWorkerMessage);
-      workerRef.current = worker;
+      // Reuse existing worker if model is already loaded
+      if (workerRef.current && isReadyRef.current) {
+        setStatus('listening');
+      } else {
+        setStatus('loading');
+        isReadyRef.current = false;
 
-      // Start model loading
-      worker.postMessage({ type: 'init' });
+        // Create worker only if it doesn't exist
+        if (!workerRef.current) {
+          const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+          worker.addEventListener('message', handleWorkerMessage);
+          worker.addEventListener('error', (e) => {
+            console.error('Worker crashed:', e.message);
+            setErrorMessage(`Worker error: ${e.message}`);
+            setStatus('error');
+          });
+          workerRef.current = worker;
+        }
+
+        // Start model loading
+        workerRef.current.postMessage({ type: 'init' });
+      }
 
       // Request mic access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -108,6 +145,11 @@ export function useSpeechToText() {
       // Setup audio capture
       const audioCtx = new AudioContext();
       audioContextRef.current = audioCtx;
+
+      // Chrome may suspend AudioContext until user gesture
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
 
       const source = audioCtx.createMediaStreamSource(stream);
       sourceRef.current = source;
@@ -121,12 +163,16 @@ export function useSpeechToText() {
       };
 
       source.connect(processor);
+      // Connect to destination to keep processor alive, but don't play back mic audio
+      // ScriptProcessorNode requires connection to destination to fire events
       processor.connect(audioCtx.destination);
 
       // Flush buffer at regular intervals
       chunkTimerRef.current = setInterval(flushBuffer, CHUNK_DURATION_S * 1000);
     } catch (err) {
-      console.error('Failed to start session:', err);
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Failed to start session:', msg, err);
+      setErrorMessage(msg);
       setStatus('error');
     }
   }, [flushBuffer, handleWorkerMessage]);
@@ -152,22 +198,25 @@ export function useSpeechToText() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
 
-    // Terminate worker
-    workerRef.current?.terminate();
-    workerRef.current = null;
-
-    // Reset
-    isReadyRef.current = false;
+    // Keep worker alive — model stays loaded in memory
     bufferRef.current = [];
     setStatus('idle');
   }, []);
 
-  // Cleanup on unmount
+  // Cleanup on unmount — terminate worker
   useEffect(() => {
     return () => {
       stopSession();
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      isReadyRef.current = false;
     };
   }, [stopSession]);
 
-  return { status, subtitles, loadProgress, startSession, stopSession };
+  const updateLanguage = useCallback((lang: string | null) => {
+    setLanguage(lang);
+    languageRef.current = lang;
+  }, []);
+
+  return { status, subtitles, loadProgress, errorMessage, language, setLanguage: updateLanguage, detectedLanguage, startSession, stopSession };
 }
