@@ -2,9 +2,8 @@ import { useState, useRef, useCallback } from 'preact/hooks';
 import type { AppStatus, SubtitleLine, SpeechRecognitionInstance } from './types';
 
 export const LANGUAGES = [
-  { code: '', label: 'Auto-detect' },
-  { code: 'en-US', label: 'English' },
   { code: 'th-TH', label: 'ไทย' },
+  { code: 'en-US', label: 'English' },
   { code: 'zh-CN', label: '中文' },
   { code: 'ja-JP', label: '日本語' },
   { code: 'ko-KR', label: '한국어' },
@@ -77,10 +76,12 @@ export function useWebSpeechApi() {
 
         console.log('[webspeech]', result.isFinal ? 'FINAL' : 'interim', `"${transcript}"`);
         if (result.isFinal) {
+          const idToRemove = interimId;
           interimId = null;
           setSubtitles((prev) => {
+            const filtered = idToRemove ? prev.filter((s) => s.id !== idToRemove) : prev;
             const next = [
-              ...prev,
+              ...filtered,
               { id: `${Date.now()}-${Math.random()}`, text: transcript, timestamp: Date.now() },
             ];
             return next.slice(-MAX_SUBTITLES);

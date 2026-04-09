@@ -6,12 +6,12 @@ import type { EngineType } from './types'
 import styles from './app.module.css'
 
 const ENGINE_OPTIONS = [
-  { value: 'webspeech', label: 'Built-in (online)' },
-  { value: 'whisper', label: 'Whisper AI (offline)' },
+  { value: 'webspeech', label: 'Built-in' },
+  { value: 'whisper', label: 'Whisper AI' },
 ]
 
 export function App() {
-  const [engine, setEngine] = useState<EngineType>('webspeech')
+  const [engine, setEngine] = useState<EngineType>('whisper')
   const whisper = useSpeechToText()
   const webspeech = useWebSpeechApi()
 
