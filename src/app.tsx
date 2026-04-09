@@ -1,100 +1,63 @@
-import { useState } from 'preact/hooks'
-import preactLogo from './assets/preact.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './app.css'
+import { useSpeechToText } from './useSpeechToText'
+import styles from './app.module.css'
 
 export function App() {
-  const [count, setCount] = useState(0)
+  const { status, subtitles, loadProgress, startSession, stopSession } = useSpeechToText()
 
   return (
-    <>
-      <section id="center">
-        <div class="hero">
-          <img src={heroImg} class="base" width="170" height="179" alt="" />
-          <img src={preactLogo} class="framework" alt="Preact logo" />
-          <img src={viteLogo} class="vite" alt="Vite logo" />
+    <div class={styles.container}>
+      {status === 'idle' && (
+        <div class={styles.idleScreen}>
+          <span class={styles.title}>Real-time Subtitles</span>
+          <button class={styles.startButton} onClick={startSession}>
+            <span class={styles.micIcon}>🎙</span>
+            Start Session
+          </button>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/app.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button class="counter" onClick={() => setCount((count) => count + 1)}>
-          Count is {count}
-        </button>
-      </section>
+      )}
 
-      <div class="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img class="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://preactjs.com/" target="_blank">
-                <img class="button-icon" src={preactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {status === 'loading' && (
+        <div class={styles.loadingScreen}>
+          <span class={styles.loadingText}>Loading AI Model…</span>
+          <div class={styles.progressBar}>
+            <div class={styles.progressFill} style={{ width: `${loadProgress}%` }} />
+          </div>
         </div>
-        <div id="social">
-          <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      )}
 
-      <div class="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {(status === 'listening' || status === 'processing') && (
+        <div class={styles.listeningScreen}>
+          <div class={styles.statusBar}>
+            <div class={styles.statusIndicator}>
+              <span class={styles.statusDot} />
+              {status === 'processing' ? 'Processing…' : 'Listening…'}
+            </div>
+            <button class={styles.stopButton} onClick={stopSession}>
+              Stop
+            </button>
+          </div>
+
+          <div class={styles.subtitleContainer}>
+            {subtitles.map((line) => (
+              <div key={line.id} class={styles.subtitleLine}>
+                {line.text}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {status === 'error' && (
+        <div class={styles.errorScreen}>
+          <span class={styles.errorText}>
+            Something went wrong. Please check microphone permissions.
+          </span>
+          <button class={styles.startButton} onClick={startSession}>
+            <span class={styles.micIcon}>🎙</span>
+            Try Again
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
