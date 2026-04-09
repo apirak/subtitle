@@ -1,8 +1,14 @@
 import { useState } from 'preact/hooks';
 import { useSpeechToText, LANGUAGES as WHISPER_LANGUAGES } from './useSpeechToText'
 import { useWebSpeechApi, LANGUAGES as WEBSPEECH_LANGUAGES } from './useWebSpeechApi'
+import { Dropdown } from './Dropdown'
 import type { EngineType } from './types'
 import styles from './app.module.css'
+
+const ENGINE_OPTIONS = [
+  { value: 'webspeech', label: 'Built-in (online)' },
+  { value: 'whisper', label: 'Whisper AI (offline)' },
+]
 
 export function App() {
   const [engine, setEngine] = useState<EngineType>('webspeech')
@@ -11,14 +17,19 @@ export function App() {
 
   const current = engine === 'whisper' ? whisper : webspeech
   const { status, subtitles, loadProgress, errorMessage, language, setLanguage, detectedLanguage, startSession, stopSession } = current
-  const languages = engine === 'whisper' ? WHISPER_LANGUAGES : WEBSPEECH_LANGUAGES
+  const languages = (engine === 'whisper' ? WHISPER_LANGUAGES : WEBSPEECH_LANGUAGES).map((l) => ({
+    value: l.code ?? '',
+    label: l.label,
+  }))
 
-  const handleEngineChange = (newEngine: EngineType) => {
+  const handleEngineChange = (value: string) => {
     if (status !== 'idle') return
-    setEngine(newEngine)
+    setEngine(value as EngineType)
   }
 
-  const isOffline = engine === 'whisper'
+  const handleLanguageChange = (value: string) => {
+    setLanguage(value === '' ? null : value)
+  }
 
   return (
     <div class={styles.container}>
@@ -28,32 +39,8 @@ export function App() {
             <span class={styles.title}>Real-time Subtitles</span>
           </div>
 
-          <div class={styles.offlineToggle} onClick={() => handleEngineChange(isOffline ? 'webspeech' : 'whisper')}>
-            <span class={styles.toggleLabel}>Offline mode</span>
-            <div class={styles.toggleSwitch}>
-              <div class={`${styles.toggleKnob} ${isOffline ? styles.toggleKnobOn : ''}`} />
-            </div>
-            <span class={styles.toggleDesc}>
-              {isOffline ? 'Whisper AI · better accuracy · ~40 MB download' : 'Built-in · instant start · requires internet'}
-            </span>
-          </div>
-
-          <div class={styles.languageSelector}>
-            <select
-              class={styles.languageSelect}
-              value={language ?? ''}
-              onChange={(e) => {
-                const val = (e.target as HTMLSelectElement).value;
-                setLanguage(val === '' ? null : val);
-              }}
-            >
-              {languages.map((lang) => (
-                <option key={lang.code ?? 'auto'} value={lang.code ?? ''}>
-                  {lang.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Dropdown value={engine} options={ENGINE_OPTIONS} onChange={handleEngineChange} />
+          <Dropdown value={language ?? ''} options={languages} onChange={handleLanguageChange} />
 
           <button class={styles.startButton} onClick={startSession}>
             <span class={styles.micIcon}>
