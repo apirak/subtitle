@@ -141,44 +141,36 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  z-index: 10;
+  z-index: 20;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, transparent 100%);
 }
 
 .statusIndicator {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
+  gap: 10px;
+  font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.5);
 }
 
 .statusDot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
   animation: pulseDot 2s ease-in-out infinite;
 }
 
 .langBadge {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  padding: 2px 7px;
+  padding: 3px 8px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.45);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.engineBadge {
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.45);
-  letter-spacing: 0.05em;
 }
 
 .stopButton {
@@ -205,6 +197,7 @@
   left: 0;
   right: 0;
   bottom: 20%;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -219,24 +212,24 @@
   color: #fff;
   text-align: center;
   text-shadow: 0 2px 20px rgba(0, 0, 0, 0.8);
-  max-width: 80%;
+  max-width: min(90%, 42rem);
   line-height: 1.4;
   animation: slideUp 0.4s ease-out forwards;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
 }
 
 .subtitleLine:last-child {
-  font-size: 2.4rem;
+  font-size: 3rem;
   font-weight: 600;
   color: #fff;
 }
 
 .subtitleLine:not(:last-child) {
-  opacity: 0.4;
-  font-size: 1.4rem;
+  opacity: 0.25;
+  font-size: 1.8rem;
 }
 
 .subtitleTranslation {
@@ -248,7 +241,24 @@
 }
 
 .subtitleTranslating {
-  animation: translatePulse 1s ease-in-out infinite;
+  display: inline-flex;
+  gap: 2px;
+  font-size: 0.6em;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.4);
+  min-height: 1.2em;
+}
+
+.dot {
+  animation: dotBounce 1.2s ease-in-out infinite;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 0.3s;
 }
 
 /* ── Error State ── */
@@ -294,7 +304,7 @@
   50% { opacity: 0.5; transform: scale(0.8); }
 }
 
-@keyframes translatePulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+@keyframes dotBounce {
+  0%, 60%, 100% { opacity: 0.2; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
 }

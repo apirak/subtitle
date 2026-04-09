@@ -11,13 +11,13 @@ export function App() {
   const [targetLang, setTargetLang] = useState('th')
   const [translations, setTranslations] = useState<Record<string, string>>({})
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [subtitlePosition, setSubtitlePosition] = useState(50)
+  const [subtitlePosition, setSubtitlePosition] = useState(20)
   const translatedRef = useRef<Set<string>>(new Set())
 
   const whisper = useSpeechToText()
   const webspeech = useWebSpeechApi()
   const current = engine === 'whisper' ? whisper : webspeech
-  const { status, subtitles, loadProgress, errorMessage, language, setLanguage, detectedLanguage, startSession, stopSession } = current
+  const { status, subtitles, loadProgress, errorMessage, language, setLanguage, startSession, stopSession } = current
 
   const { translate } = useTranslation(targetLang)
 
@@ -88,15 +88,14 @@ export function App() {
       )}
 
       {(status === 'listening' || status === 'processing') && (
-        <div class={styles.listeningScreen}>
+        <>
+          <div class={styles.listeningScreen} />
+
           <div class={styles.statusBar}>
             <div class={styles.statusIndicator}>
               <span class={styles.statusDot} />
               {status === 'processing' ? 'Processing…' : 'Listening…'}
-              {detectedLanguage && (
-                <span class={styles.langBadge}>{detectedLanguage.toUpperCase()}</span>
-              )}
-              <span class={styles.engineBadge}>{engine === 'whisper' ? 'Whisper AI' : 'Built-in'}</span>
+              <span class={styles.langBadge}>{sourceLabel} → {targetLabel}</span>
             </div>
             <button class={styles.stopButton} onClick={stopSession}>
               Stop
@@ -104,16 +103,29 @@ export function App() {
           </div>
 
           <div class={styles.subtitleContainer} style={{ bottom: `${subtitlePosition}%` }}>
-            {subtitles.map((line) => (
-              <div key={line.id} class={styles.subtitleLine}>
-                <span>{line.text}</span>
-                {translations[line.id] && (
-                  <span class={styles.subtitleTranslation}>{translations[line.id]}</span>
-                )}
-              </div>
-            ))}
+            {subtitles.map((line) => {
+              const isFinal = !line.id.startsWith('interim-')
+              const translation = translations[line.id]
+              const isTranslating = isFinal && !translation
+
+              return (
+                <div key={line.id} class={styles.subtitleLine}>
+                  <span>{line.text}</span>
+                  {isTranslating && (
+                    <span class={styles.subtitleTranslating}>
+                      <span class={styles.dot}>·</span>
+                      <span class={styles.dot}>·</span>
+                      <span class={styles.dot}>·</span>
+                    </span>
+                  )}
+                  {translation && (
+                    <span class={styles.subtitleTranslation}>{translation}</span>
+                  )}
+                </div>
+              )
+            })}
           </div>
-        </div>
+        </>
       )}
 
       {status === 'error' && (
