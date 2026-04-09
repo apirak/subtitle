@@ -203,7 +203,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 24px;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .subtitleLine {
