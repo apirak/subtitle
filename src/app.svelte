@@ -98,7 +98,7 @@ Return only the translation.`;
   <title>Real-time Subtitles</title>
 </svelte:head>
 
-<div class="container">
+<div class="w-full h-screen flex flex-col items-center justify-center relative overflow-hidden">
   {#if speech.status === 'idle'}
     <IdleScreen {sourceLabel} {targetLabel} onStart={speech.start} onSettings={() => settingsOpen = true} />
   {:else if speech.status === 'listening'}
@@ -126,15 +126,4 @@ Return only the translation.`;
   />
 </div>
 
-<style>
-  .container {
-    width: 100%;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    overflow: hidden;
-  }
-</style>
+
