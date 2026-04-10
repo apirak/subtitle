@@ -1,7 +1,22 @@
+import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { defineConfig } from 'vite'
-import preact from '@preact/preset-vite'
+import path from 'path'
 
-// https://vite.dev/config/
+const host = process.env.TAURI_DEV_HOST
+
 export default defineConfig({
-  plugins: [preact()],
+  plugins: [svelte()],
+  resolve: {
+    alias: {
+      '$lib': path.resolve('./src/lib'),
+    },
+  },
+  clearScreen: false,
+  server: {
+    port: 5173,
+    strictPort: false,
+    host: host || false,
+    hmr: host ? { protocol: 'ws', host, port: 5174 } : undefined,
+  },
+  envPrefix: ['VITE_', 'TAURI_'],
 })

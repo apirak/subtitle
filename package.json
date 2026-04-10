@@ -5,18 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "typecheck": "tsc -b",
-    "model": "node scripts/download-model.mjs",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@huggingface/transformers": "^4.0.1",
-    "preact": "^10.29.1"
+    "build": "vite build",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "devDependencies": {
-    "@preact/preset-vite": "^2.10.5",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@tauri-apps/cli": "^2.10.1",
     "@types/node": "^24.12.2",
+    "svelte": "^5.55.2",
     "typescript": "~6.0.2",
     "vite": "^8.0.4"
   }
