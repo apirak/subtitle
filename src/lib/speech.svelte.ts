@@ -131,7 +131,35 @@ class Speech {
     this.unlistenError?.();
   };
 
-  start = () => {
+  startCapture = async (): Promise<{ sample_rate: number; channels: number }> => {
+    try {
+      const result = await invoke<{ sample_rate: number; channels: number }>('audio_capture_start');
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.setError(`Audio capture failed: ${message}`);
+      throw err;
+    }
+  };
+
+  stopCapture = async (): Promise<void> => {
+    try {
+      await invoke('audio_capture_stop');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('Audio capture stop error:', message);
+    }
+  };
+
+  start = async () => {
+    // Start Rust audio capture (microphone -> 16kHz mono chunks)
+    try {
+      await this.startCapture();
+    } catch {
+      // Error already set by startCapture via setError
+      return;
+    }
+
     const recognition = createRecognition();
     if (!recognition) {
       this.errorMessage = 'Web Speech API is not supported in this browser. Try Safari or Chrome.';
@@ -208,7 +236,10 @@ class Speech {
     }
   }
 
-  stop = () => {
+  stop = async () => {
+    // Stop Rust audio capture
+    await this.stopCapture();
+
     this.stopping = true;
     if (this.recognition) {
       this.recognition.onend = null;
