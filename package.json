@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "typecheck:native": "tsgo --noEmit",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
@@ -15,6 +16,7 @@
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2.10.1",
     "@types/node": "^24.12.2",
+    "@typescript/native-preview": "^7.0.0-dev.20260404.1",
     "svelte": "^5.55.2",
     "tailwindcss": "^4.2.2",
     "typescript": "~6.0.2",
