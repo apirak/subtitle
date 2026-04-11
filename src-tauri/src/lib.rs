@@ -1,3 +1,4 @@
+mod audio;
 mod commands;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -11,6 +12,7 @@ pub fn run() {
             .build(),
         )?;
       }
+      app.manage(audio::AudioState::new());
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![

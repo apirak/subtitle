@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use keyring::Entry;
+use crate::audio;
+use tauri::State;
 
 /// Service name used for keyring entries
 const SERVICE_NAME: &str = "subtitle-app";
@@ -32,12 +34,18 @@ pub struct Settings {
 }
 
 #[tauri::command]
-pub async fn audio_capture_start() -> Result<AudioCaptureResponse, String> {
+pub async fn audio_capture_start(
+    state: State<'_, audio::AudioState>,
+) -> Result<AudioCaptureResponse, String> {
+    audio::start_capture(&state)?;
     Ok(AudioCaptureResponse { sample_rate: 16000, channels: 1 })
 }
 
 #[tauri::command]
-pub async fn audio_capture_stop() -> Result<(), String> {
+pub async fn audio_capture_stop(
+    state: State<'_, audio::AudioState>,
+) -> Result<(), String> {
+    audio::stop_capture(&state)?;
     Ok(())
 }
 
