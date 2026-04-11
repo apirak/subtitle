@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
   import { speech } from './lib/speech.svelte';
   import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from './lib/languages';
   import IdleScreen from './components/IdleScreen.svelte';
@@ -16,10 +17,45 @@
   let translations = $state<Record<string, string>>({});
   let settingsOpen = $state(false);
   let subtitlePosition = $state(20);
+  let selectedEngine = $state<'browser' | 'vosk'>('browser');
+  let remoteEndpoint = $state('');
+  let modelPath = $state('');
+  let apiKey = $state('');
+  let overlayTransparency = $state(80);
+  let fontSize = $state(24);
+  let translationEngine = $state('none');
 
   const translatedIds = new Set<string>();
   const inFlight = new Set<string>();
   const recentLines: string[] = [];
+
+  onMount(async () => {
+    try {
+      const settings = await invoke<{
+        engine: string;
+        source_lang: string;
+        target_lang: string;
+        subtitle_position: number;
+        remote_endpoint: string | null;
+        model_path: string | null;
+        overlay_transparency: number | null;
+        font_size: number | null;
+        translation_engine: string | null;
+      }>('settings_get');
+      selectedEngine = settings.engine as 'browser' | 'vosk';
+      speech.engine = settings.engine as 'browser' | 'vosk';
+      speech.language = settings.source_lang;
+      targetLang = settings.target_lang;
+      subtitlePosition = settings.subtitle_position;
+      remoteEndpoint = settings.remote_endpoint ?? '';
+      modelPath = settings.model_path ?? '';
+      overlayTransparency = settings.overlay_transparency ?? 80;
+      fontSize = settings.font_size ?? 24;
+      translationEngine = settings.translation_engine ?? 'none';
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  });
 
   let sourceLabel = $derived(
     SOURCE_LANGUAGES.find((l) => l.code === speech.language)?.label ?? 'Auto'
@@ -88,6 +124,23 @@
     {subtitlePosition}
     onSubtitlePositionChange={(v) => subtitlePosition = v}
     onClose={() => settingsOpen = false}
+    {overlayTransparency}
+    onOverlayTransparencyChange={(v) => {
+      overlayTransparency = v;
+      speech.saveSetting?.('overlay_transparency', v).catch(console.error);
+    }}
+    {fontSize}
+    onFontSizeChange={(v) => {
+      fontSize = v;
+      speech.saveSetting?.('font_size', v).catch(console.error);
+    }}
+    {translationEngine}
+    onTranslationEngineChange={(v) => {
+      translationEngine = v;
+      speech.saveSetting?.('translation_engine', v).catch(console.error);
+    }}
+    engine={speech.engine}
+    onEngineChange={(v) => speech.setEngine(v as 'browser' | 'vosk' | 'remote')}
   />
 </div>
 

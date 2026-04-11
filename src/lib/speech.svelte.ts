@@ -46,9 +46,15 @@ class Speech {
   subtitles = $state<SubtitleLine[]>([]);
   language = $state('en-US');
   errorMessage = $state('');
+  engine = $state<'browser' | 'vosk' | 'remote'>('browser');
+  remoteEndpoint = $state<string>('');
+  apiKey = $state<string>('');
 
   private recognition: SpeechRecognitionInstance | null = null;
   private stopping = false;
+
+  private _subtitleUnlisten: (() => void) | null = null;
+  private _errorUnlisten: (() => void) | null = null;
 
   private unlistenUpdate?: UnlistenFn;
   private unlistenFinal?: UnlistenFn;
@@ -132,6 +138,26 @@ class Speech {
   };
 
   startCapture = async (): Promise<{ sample_rate: number; channels: number }> => {
+    if (this.engine === 'remote') {
+      try {
+        const result = await invoke<{ sample_rate: number; channels: number }>('audio_capture_start');
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.setError(`Audio capture failed: ${message}`);
+        throw err;
+      }
+    }
+    if (this.engine === 'vosk') {
+      try {
+        const result = await invoke<{ sample_rate: number; channels: number }>('audio_capture_start');
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.setError(`Audio capture failed: ${message}`);
+        throw err;
+      }
+    }
     try {
       const result = await invoke<{ sample_rate: number; channels: number }>('audio_capture_start');
       return result;
@@ -143,6 +169,22 @@ class Speech {
   };
 
   stopCapture = async (): Promise<void> => {
+    if (this.engine === 'remote') {
+      try {
+        await invoke('remote_asr_stop');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('Remote ASR stop error:', message);
+      }
+    }
+    if (this.engine === 'vosk') {
+      try {
+        await invoke('vosk_stop');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('Vosk stop error:', message);
+      }
+    }
     try {
       await invoke('audio_capture_stop');
     } catch (err) {
@@ -152,6 +194,72 @@ class Speech {
   };
 
   start = async () => {
+    if (this.engine === 'remote') {
+      try {
+        await this.startCapture();
+        await invoke('remote_asr_start');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.setError(`Failed to start Remote ASR: ${message}`);
+        return;
+      }
+
+      this._subtitleUnlisten = await listen<{ text: string; timestamp: number; is_final: boolean }>('subtitle', (event) => {
+        const { text, timestamp } = event.payload;
+        if (!text || !text.trim()) return;
+        this.subtitles = appendSubtitle(this.subtitles, null, {
+          id: `${timestamp}-${Math.random()}`,
+          text: text.trim(),
+          timestamp,
+        });
+      });
+
+      this._errorUnlisten = await listen<{ message: string; retryable: boolean }>('asr-error', (event) => {
+        const { message, retryable } = event.payload;
+        this.errorMessage = message;
+        if (!retryable) {
+          this.status = 'error';
+        }
+      });
+
+      this.subtitles = [];
+      this.errorMessage = '';
+      this.status = 'listening';
+      return;
+    }
+
+    if (this.engine === 'vosk') {
+      this.subtitles = [];
+      this.errorMessage = '';
+
+      try {
+        await this.startCapture();
+      } catch {
+        return;
+      }
+
+      try {
+        // Load the Vosk model before starting recognition
+        const modelPath = await invoke<string>('vosk_get_model_path');
+        await invoke('vosk_load_model', { path: modelPath });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.setError(`Failed to load Vosk model: ${message}`);
+        return;
+      }
+
+      try {
+        await invoke('vosk_start');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.setError(`Failed to start Vosk ASR: ${message}`);
+        return;
+      }
+
+      this.status = 'listening';
+      return;
+    }
+
     // Start Rust audio capture (microphone -> 16kHz mono chunks)
     try {
       await this.startCapture();
@@ -237,7 +345,15 @@ class Speech {
   }
 
   stop = async () => {
-    // Stop Rust audio capture
+    if (this._subtitleUnlisten) {
+      this._subtitleUnlisten();
+      this._subtitleUnlisten = null;
+    }
+    if (this._errorUnlisten) {
+      this._errorUnlisten();
+      this._errorUnlisten = null;
+    }
+
     await this.stopCapture();
 
     this.stopping = true;
@@ -255,6 +371,14 @@ class Speech {
       this.recognition.onend = null;
       this.recognition.stop();
       this.recognition = null;
+      setTimeout(() => this.start(), 100);
+    }
+  }
+
+  setEngine = (engine: 'browser' | 'vosk' | 'remote') => {
+    this.engine = engine;
+    if (this.status === 'listening') {
+      this.stop();
       setTimeout(() => this.start(), 100);
     }
   }

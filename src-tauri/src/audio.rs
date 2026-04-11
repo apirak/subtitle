@@ -30,6 +30,10 @@ impl AudioState {
             receiver: Mutex::new(None),
         }
     }
+
+    pub fn take_receiver(&self) -> Option<mpsc::Receiver<Vec<f32>>> {
+        self.receiver.lock().ok()?.take()
+    }
 }
 
 /// Start capturing audio from the default microphone.
@@ -53,9 +57,7 @@ pub fn start_capture(state: &AudioState) -> Result<u32, String> {
 
     log::info!(
         "Using input device: {}",
-        device
-            .name()
-            .unwrap_or_else(|_| "unknown".to_string())
+        device.name().unwrap_or_else(|_| "unknown".to_string())
     );
 
     // Try to get a 16kHz mono f32 config first, fall back to native
@@ -134,7 +136,8 @@ pub fn start_capture(state: &AudioState) -> Result<u32, String> {
             .build_input_stream(
                 &config,
                 move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                    let f32_data: Vec<f32> = data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
+                    let f32_data: Vec<f32> =
+                        data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
                     process_audio_chunk(
                         &f32_data,
                         native_channels,
@@ -153,7 +156,8 @@ pub fn start_capture(state: &AudioState) -> Result<u32, String> {
             .build_input_stream(
                 &config,
                 move |data: &[i32], _: &cpal::InputCallbackInfo| {
-                    let f32_data: Vec<f32> = data.iter().map(|&s| s as f32 / i32::MAX as f32).collect();
+                    let f32_data: Vec<f32> =
+                        data.iter().map(|&s| s as f32 / i32::MAX as f32).collect();
                     process_audio_chunk(
                         &f32_data,
                         native_channels,
@@ -194,8 +198,8 @@ pub fn stop_capture(state: &AudioState) -> Result<(), String> {
 
 /// State for linear interpolation resampling.
 struct ResampleState {
-    ratio: f64,      // from_rate / to_rate
-    position: f64,   // fractional position in input stream
+    ratio: f64,    // from_rate / to_rate
+    position: f64, // fractional position in input stream
 }
 
 /// Process a chunk of audio data from the cpal callback.

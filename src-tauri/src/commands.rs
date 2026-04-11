@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use keyring::Entry;
 use crate::audio;
-use tauri::State;
+use crate::vosk::VoskAsr;
+use tauri::{Emitter, State, AppHandle};
 
 /// Service name used for keyring entries
 const SERVICE_NAME: &str = "subtitle-app";
@@ -31,6 +32,8 @@ pub struct Settings {
     pub target_lang: String,
     pub overlay_transparency: f32,
     pub overlay_font_size: u32,
+    pub remote_endpoint: Option<String>,
+    pub remote_api_key_name: Option<String>,
 }
 
 #[tauri::command]
@@ -68,6 +71,8 @@ pub async fn settings_get() -> Result<Settings, String> {
         target_lang: "es".to_string(),
         overlay_transparency: 0.7,
         overlay_font_size: 24,
+        remote_endpoint: None,
+        remote_api_key_name: None,
     })
 }
 
@@ -114,6 +119,55 @@ pub async fn api_key_set(key_name: String, key_value: String) -> Result<(), Stri
     Ok(())
 }
 
+#[tauri::command]
+pub async fn vosk_load_model(
+    path: String,
+    state: State<'_, VoskAsr>,
+) -> Result<(), String> {
+    let model = state.inner().model.clone();
+    let path = path.clone();
+    tokio::task::spawn_blocking(move || {
+        let model_guard = model.lock().map_err(|e| e.to_string())?;
+        if model_guard.is_some() {
+            return Err("Model already loaded".to_string());
+        }
+        drop(model_guard);
+        
+        let vosk_model = vosk::Model::new(&path)
+            .ok_or_else(|| format!("Failed to load model from {}", path))?;
+        let mut model_guard = model.lock().map_err(|e| e.to_string())?;
+        *model_guard = Some(std::sync::Arc::new(vosk_model));
+        Ok(())
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn vosk_get_model_path() -> Result<String, String> {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let model_path = format!("{}/vosk-model", manifest_dir);
+    let path = std::path::Path::new(&model_path);
+    if !path.exists() {
+        return Err(format!("Model path does not exist: {}", model_path));
+    }
+    Ok(model_path)
+}
+
+#[tauri::command]
+pub async fn vosk_start(
+    app: tauri::AppHandle,
+    audio_state: State<'_, audio::AudioState>,
+    vosk_state: State<'_, VoskAsr>,
+) -> Result<(), String> {
+    vosk_state.start(app, audio_state)
+}
+
+#[tauri::command]
+pub async fn vosk_stop(
+    vosk_state: State<'_, VoskAsr>,
+) -> Result<(), String> {
+    vosk_state.stop().await
+}
+
 // =============================================================================
 // Event Streaming Protocol
 // =============================================================================
@@ -135,8 +189,6 @@ pub async fn api_key_set(key_name: String, key_value: String) -> Result<(), Stri
 // Payload structure for "error":
 //   { "code": "ERROR_CODE", "message": "error description" }
 // =============================================================================
-
-use tauri::{Emitter, AppHandle};
 
 /// Emit a subtitle update event (interim results)
 pub fn emit_subtitle_update(app: &AppHandle, id: &str, text: &str, is_final: bool) -> Result<(), String> {
