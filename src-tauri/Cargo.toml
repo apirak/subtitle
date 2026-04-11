@@ -26,4 +26,4 @@ tauri-plugin-log = "2"
 keyring = "3"
 uuid = { version = "1.0", features = ["v4"] }
 cpal = "0.17"
-rubato = "2.0"
+tokio = { version = "1", features = ["sync"] }

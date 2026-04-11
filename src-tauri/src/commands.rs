@@ -56,7 +56,8 @@ pub async fn asr_infer(audio_data: Vec<u8>, sample_rate: u32) -> Result<AsrRespo
 
 #[tauri::command]
 pub async fn translate(text: String, source_lang: String, target_lang: String) -> Result<TranslateResponse, String> {
-    Ok(TranslateResponse { original: text, translated: format!("[translated: {}]", text) })
+    let translated = format!("[translated: {}]", text);
+    Ok(TranslateResponse { original: text, translated })
 }
 
 #[tauri::command]

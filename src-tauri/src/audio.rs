@@ -1,6 +1,5 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{SampleFormat, SampleRate, StreamConfig};
-use rubato::{Fft, FixedSync, Resampler};
+use cpal::{SampleFormat, StreamConfig};
 use std::sync::Mutex;
 use tokio::sync::mpsc;
 
@@ -55,15 +54,17 @@ pub fn start_capture(state: &AudioState) -> Result<u32, String> {
     log::info!(
         "Using input device: {}",
         device
-            .description()
+            .name()
             .unwrap_or_else(|_| "unknown".to_string())
     );
 
     // Try to get a 16kHz mono f32 config first, fall back to native
-    let config = find_16khz_mono_config(&device)
-        .unwrap_or_else(|_| find_native_config(&device)?);
+    let config = match find_16khz_mono_config(&device) {
+        Ok(c) => c,
+        Err(_) => find_native_config(&device)?,
+    };
 
-    let native_rate = config.sample_rate().0;
+    let native_rate = config.sample_rate();
     let native_channels = config.channels();
     let needs_resampling = native_rate != TARGET_SAMPLE_RATE;
     let needs_downmix = native_channels > 1;
@@ -94,32 +95,25 @@ pub fn start_capture(state: &AudioState) -> Result<u32, String> {
     // Pre-allocate accumulator buffer
     let accumulator = Mutex::new(Vec::<f32>::with_capacity(CHUNK_SIZE * 4));
 
-    // Set up resampler if needed (outside the callback to avoid allocation inside it)
-    let resampler: Option<Mutex<Fft<f32>>> = if needs_resampling {
-        let chunk = calculate_fft_chunk_size(native_rate as usize, TARGET_SAMPLE_RATE as usize);
-        let resamp = Fft::new(
-            native_rate as usize,
-            TARGET_SAMPLE_RATE as usize,
-            chunk,
-            1,
-            TARGET_CHANNELS as usize,
-            FixedSync::Input,
-        )
-        .map_err(|e| format!("Failed to create resampler: {}", e))?;
-        Some(Mutex::new(resamp))
+    // Resample ratio for linear interpolation (only used if needs_resampling)
+    let resample_ratio = if needs_resampling {
+        native_rate as f64 / TARGET_SAMPLE_RATE as f64
     } else {
-        None
+        1.0
     };
-
-    // Resampler input buffer: accumulates mono samples until rubato's required input size
-    let resampler_input: Option<Mutex<Vec<f32>>> = if needs_resampling {
-        Some(Mutex::new(Vec::new()))
+    let resample_info = if needs_resampling {
+        Some(Mutex::new(ResampleState {
+            ratio: resample_ratio,
+            position: 0.0,
+        }))
     } else {
         None
     };
 
     let sample_format = config.sample_format();
     let config: StreamConfig = config.into();
+
+    let tx_callback = tx.clone();
 
     let stream = match sample_format {
         SampleFormat::F32 => device
@@ -132,9 +126,8 @@ pub fn start_capture(state: &AudioState) -> Result<u32, String> {
                         needs_downmix,
                         needs_resampling,
                         &accumulator,
-                        &resampler,
-                        &resampler_input,
-                        &tx,
+                        &resample_info,
+                        &tx_callback,
                     );
                 },
                 |err| log::error!("Audio stream error: {}", err),
@@ -145,16 +138,15 @@ pub fn start_capture(state: &AudioState) -> Result<u32, String> {
             .build_input_stream(
                 &config,
                 move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                    let f32_data: Vec<f32> = data.iter().map(|s| s.to_f32()).collect();
+                    let f32_data: Vec<f32> = data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
                     process_audio_chunk(
                         &f32_data,
                         native_channels,
                         needs_downmix,
                         needs_resampling,
                         &accumulator,
-                        &resampler,
-                        &resampler_input,
-                        &tx,
+                        &resample_info,
+                        &tx_callback,
                     );
                 },
                 |err| log::error!("Audio stream error: {}", err),
@@ -165,16 +157,15 @@ pub fn start_capture(state: &AudioState) -> Result<u32, String> {
             .build_input_stream(
                 &config,
                 move |data: &[i32], _: &cpal::InputCallbackInfo| {
-                    let f32_data: Vec<f32> = data.iter().map(|s| s.to_f32()).collect();
+                    let f32_data: Vec<f32> = data.iter().map(|&s| s as f32 / i32::MAX as f32).collect();
                     process_audio_chunk(
                         &f32_data,
                         native_channels,
                         needs_downmix,
                         needs_resampling,
                         &accumulator,
-                        &resampler,
-                        &resampler_input,
-                        &tx,
+                        &resample_info,
+                        &tx_callback,
                     );
                 },
                 |err| log::error!("Audio stream error: {}", err),
@@ -198,12 +189,17 @@ pub fn start_capture(state: &AudioState) -> Result<u32, String> {
 
 /// Stop capturing audio.
 pub fn stop_capture(state: &AudioState) -> Result<(), String> {
-    // Drop the stream (stops capture), sender, and receiver
     *state.capture.lock().map_err(|e| e.to_string())? = None;
     *state.sender.lock().map_err(|e| e.to_string())? = None;
     *state.receiver.lock().map_err(|e| e.to_string())? = None;
     log::info!("Audio capture stopped");
     Ok(())
+}
+
+/// State for linear interpolation resampling.
+struct ResampleState {
+    ratio: f64,      // from_rate / to_rate
+    position: f64,   // fractional position in input stream
 }
 
 /// Process a chunk of audio data from the cpal callback.
@@ -216,8 +212,7 @@ fn process_audio_chunk(
     needs_downmix: bool,
     needs_resampling: bool,
     accumulator: &Mutex<Vec<f32>>,
-    resampler: &Option<Mutex<Fft<f32>>>,
-    resampler_input: &Option<Mutex<Vec<f32>>>,
+    resample_info: &Option<Mutex<ResampleState>>,
     tx: &mpsc::Sender<Vec<f32>>,
 ) {
     // Step 1: Downmix to mono if needed
@@ -227,57 +222,14 @@ fn process_audio_chunk(
         data.to_vec()
     };
 
-    // Step 2: Resample if needed
+    // Step 2: Resample if needed using linear interpolation
     let samples = if needs_resampling {
-        if let Some(resamp_mutex) = resampler {
-            if let Some(input_buf_mutex) = resampler_input {
-                let mut resamp = match resamp_mutex.lock() {
-                    Ok(g) => g,
-                    Err(_) => return,
-                };
-                let mut input_buf = match input_buf_mutex.lock() {
-                    Ok(g) => g,
-                    Err(_) => return,
-                };
-
-                input_buf.extend_from_slice(&mono);
-
-                let mut output = Vec::new();
-                let needed = resamp.input_frames_next();
-
-                while input_buf.len() >= needed {
-                    let chunk: Vec<f32> = input_buf.drain(..needed).collect();
-                    // rubato v2 expects Vec<Vec<f32>> (one vec per channel)
-                    let waves_in = vec![chunk];
-                    let max_out = resamp.output_frames_max();
-                    let mut waves_out = vec![vec![0.0f32; max_out]];
-
-                    use rubato::Adapter;
-                    let input = rubato::SequentialSliceOfVecs::new(
-                        &waves_in,
-                        1,
-                        needed,
-                    )
-                    .unwrap();
-                    let mut output_adapter =
-                        rubato::SequentialSliceOfVecs::new_mut(&mut waves_out, 1, max_out)
-                            .unwrap();
-
-                    match resamp.process_into_buffer(&input, &mut output_adapter, None) {
-                        Ok((_, out_frames)) => {
-                            output.extend_from_slice(&waves_out[0][..out_frames]);
-                        }
-                        Err(e) => {
-                            log::error!("Resampling error: {}", e);
-                            return;
-                        }
-                    }
-                }
-
-                output
-            } else {
-                mono
-            }
+        if let Some(info_mutex) = resample_info {
+            let mut info = match info_mutex.lock() {
+                Ok(g) => g,
+                Err(_) => return,
+            };
+            resample_linear(&mono, &mut info)
         } else {
             mono
         }
@@ -297,6 +249,37 @@ fn process_audio_chunk(
             // Channel full -- drop chunk (real-time constraint)
         }
     }
+}
+
+/// Linear interpolation resampling. Good enough for ASR preprocessing.
+fn resample_linear(input: &[f32], state: &mut ResampleState) -> Vec<f32> {
+    if input.is_empty() {
+        return Vec::new();
+    }
+
+    // Estimate output size based on ratio
+    let output_len = ((input.len() as f64 / state.ratio) * 1.1) as usize + 1;
+    let mut output = Vec::with_capacity(output_len);
+
+    let input_len = input.len() as f64;
+
+    while state.position < input_len {
+        let idx = state.position as usize;
+        let frac = state.position - idx as f64;
+
+        let sample = if idx + 1 < input.len() {
+            input[idx] * (1.0 - frac as f32) + input[idx + 1] * frac as f32
+        } else {
+            input[idx.min(input.len() - 1)]
+        };
+        output.push(sample);
+        state.position += state.ratio;
+    }
+
+    // Carry over fractional position for next call
+    state.position -= input_len;
+
+    output
 }
 
 /// Downmix interleaved multi-channel audio to mono by averaging channels per frame.
@@ -322,12 +305,12 @@ fn find_16khz_mono_config(device: &cpal::Device) -> Result<cpal::SupportedStream
         .map_err(|e| format!("Failed to query device configs: {}", e))?;
 
     for range in configs {
-        if range.min_sample_rate() <= SampleRate(TARGET_SAMPLE_RATE)
-            && SampleRate(TARGET_SAMPLE_RATE) <= range.max_sample_rate()
+        if range.min_sample_rate() <= TARGET_SAMPLE_RATE
+            && TARGET_SAMPLE_RATE <= range.max_sample_rate()
             && range.channels() == TARGET_CHANNELS
             && range.sample_format() == SampleFormat::F32
         {
-            return Ok(range.with_sample_rate(SampleRate(TARGET_SAMPLE_RATE)));
+            return Ok(range.with_sample_rate(TARGET_SAMPLE_RATE));
         }
     }
     Err(format!(
@@ -342,29 +325,3 @@ fn find_native_config(device: &cpal::Device) -> Result<cpal::SupportedStreamConf
         .default_input_config()
         .map_err(|e| format!("Failed to get default input config: {}", e))
 }
-
-/// Calculate a reasonable FFT chunk size for the resampler.
-/// Uses GCD-based approach for clean integer ratios.
-fn calculate_fft_chunk_size(input_rate: usize, output_rate: usize) -> usize {
-    use std::cmp::min;
-    let gcd = gcd(input_rate, output_rate);
-    let ratio_in = input_rate / gcd;
-    let ratio_out = output_rate / gcd;
-    // Scale up for reasonable FFT size (at least 256, at most 4096)
-    let multiplier = min(4096 / (ratio_in.max(ratio_out)).max(1), 16).max(1);
-    ratio_in * multiplier
-}
-
-fn gcd(a: usize, b: usize) -> usize {
-    let mut a = a;
-    let mut b = b;
-    while b != 0 {
-        let t = b;
-        b = a % b;
-        a = t;
-    }
-    a
-}
-
-use cpal::Sample;
-use rubato::audioadapter::Adapter;
