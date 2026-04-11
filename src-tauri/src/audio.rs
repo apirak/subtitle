@@ -78,17 +78,13 @@ pub fn start_capture(state: &AudioState) -> Result<u32, String> {
         needs_downmix
     );
 
-    // Clamp config values to valid ranges (threat model T-2-01)
-    assert!(
-        (8000..=192000).contains(&native_rate),
-        "Invalid sample rate: {}",
-        native_rate
-    );
-    assert!(
-        (1..=8).contains(&native_channels),
-        "Invalid channel count: {}",
-        native_channels
-    );
+    // Validate config values to valid ranges (threat model T-2-01)
+    if !(8000..=192000).contains(&native_rate) {
+        return Err(format!("Invalid sample rate: {}", native_rate));
+    }
+    if !(1..=8).contains(&native_channels) {
+        return Err(format!("Invalid channel count: {}", native_channels));
+    }
 
     let (tx, rx) = mpsc::channel::<Vec<f32>>(CHANNEL_CAPACITY);
 
