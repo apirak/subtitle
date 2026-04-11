@@ -1,3 +1,5 @@
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { AppStatus, SubtitleLine } from './types';
 
 const MAX_SUBTITLES = 12;
@@ -47,6 +49,87 @@ class Speech {
 
   private recognition: SpeechRecognitionInstance | null = null;
   private stopping = false;
+
+  private unlistenUpdate?: UnlistenFn;
+  private unlistenFinal?: UnlistenFn;
+  private unlistenTranslated?: UnlistenFn;
+  private unlistenError?: UnlistenFn;
+
+  constructor() {
+    this.setupEventListeners();
+  }
+
+  private setupEventListeners = async () => {
+    this.unlistenUpdate = await listen<{ id: string; text: string; is_final: boolean; timestamp: number }>(
+      'backend://subtitle/update',
+      (event) => {
+        const payload = event.payload;
+        if (!payload.is_final) {
+          this.addInterimSubtitle(payload.id, payload.text);
+        }
+      }
+    );
+
+    this.unlistenFinal = await listen<{ id: string; text: string; is_final: boolean; timestamp: number }>(
+      'backend://subtitle/final',
+      (event) => {
+        const payload = event.payload;
+        this.addFinalSubtitle(payload.id, payload.text);
+      }
+    );
+
+    this.unlistenTranslated = await listen<{ id: string; original: string; translated: string; timestamp: number }>(
+      'backend://subtitle/translated',
+      (event) => {
+        const payload = event.payload;
+        this.setTranslation(payload.id, payload.original, payload.translated);
+      }
+    );
+
+    this.unlistenError = await listen<{ code: string; message: string }>(
+      'backend://subtitle/error',
+      (event) => {
+        const payload = event.payload;
+        this.setError(`${payload.code}: ${payload.message}`);
+      }
+    );
+  };
+
+  addInterimSubtitle = (id: string, text: string) => {
+    const interimId = `interim-${id}`;
+    this.subtitles = appendSubtitle(this.subtitles, null, {
+      id: interimId,
+      text,
+      timestamp: Date.now(),
+    });
+  };
+
+  addFinalSubtitle = (id: string, text: string) => {
+    // Remove any interim subtitle with the same base id
+    const toRemove = [...this.subtitles].find((s) => s.id === `interim-${id}`)?.id;
+    this.subtitles = appendSubtitle(this.subtitles, toRemove ?? null, {
+      id,
+      text,
+      timestamp: Date.now(),
+    });
+  };
+
+  setTranslation = (_id: string, _original: string, translated: string) => {
+    // Translation storage is managed by app.svelte
+    // This listener exists for future direct backend translation integration
+  };
+
+  setError = (message: string) => {
+    this.errorMessage = message;
+    this.status = 'error';
+  };
+
+  destroy = () => {
+    this.unlistenUpdate?.();
+    this.unlistenFinal?.();
+    this.unlistenTranslated?.();
+    this.unlistenError?.();
+  };
 
   start = () => {
     const recognition = createRecognition();
@@ -144,6 +227,20 @@ class Speech {
       setTimeout(() => this.start(), 100);
     }
   }
+
+  translate = async (text: string, sourceLang: string, targetLang: string): Promise<string> => {
+    try {
+      const result = await invoke<{ original: string; translated: string }>('translate', {
+        text,
+        source_lang: sourceLang,
+        target_lang: targetLang,
+      });
+      return result.translated;
+    } catch (err) {
+      console.error('Translation error:', err);
+      throw err;
+    }
+  };
 }
 
 function appendSubtitle(

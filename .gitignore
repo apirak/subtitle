@@ -28,3 +28,4 @@ public/models/
 *.njsproj
 *.sln
 *.sw?
+.planning/
