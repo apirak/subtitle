@@ -160,21 +160,46 @@ pub async fn test_event_emission(app: tauri::AppHandle) -> Result<String, String
 
 #[tauri::command]
 pub async fn api_key_get(key_name: String) -> Result<Option<String>, String> {
+    log::info!("api_key_get called with key_name: {}", key_name);
+    log::info!("SERVICE_NAME is: {}", SERVICE_NAME);
     let entry = Entry::new(SERVICE_NAME, &key_name)
-        .map_err(|e| format!("keyring error: {}", e))?;
+        .map_err(|e| {
+            log::error!("api_key_get: Entry::new failed for service='{}', key='{}': {:?}", SERVICE_NAME, key_name, e);
+            format!("keyring error: {}", e)
+        })?;
     match entry.get_password() {
-        Ok(password) => Ok(Some(password)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(format!("keyring error: {}", e)),
+        Ok(password) => {
+            log::info!("api_key_get found password for {}: {} chars", key_name, password.len());
+            Ok(Some(password))
+        }
+        Err(keyring::Error::NoEntry) => {
+            log::warn!("api_key_get: no entry found for {}", key_name);
+            log::warn!("api_key_get: searching all collections for service='{}' key='{}'", SERVICE_NAME, key_name);
+            Ok(None)
+        }
+        Err(e) => {
+            log::error!("api_key_get: keyring error for {}: {:?}", key_name, e);
+            Err(format!("keyring error: {}", e))
+        }
     }
 }
 
 #[tauri::command]
 pub async fn api_key_set(key_name: String, key_value: String) -> Result<(), String> {
+    log::info!("api_key_set ENTRY: key_name='{}', key_value len={}", key_name, key_value.len());
+    log::info!("SERVICE_NAME is: {}", SERVICE_NAME);
     let entry = Entry::new(SERVICE_NAME, &key_name)
-        .map_err(|e| format!("keyring error: {}", e))?;
+        .map_err(|e| {
+            log::error!("api_key_set: Entry::new failed: {:?}", e);
+            format!("keyring error: {}", e)
+        })?;
+    log::info!("api_key_set: Entry created, calling set_password...");
     entry.set_password(&key_value)
-        .map_err(|e| format!("keyring error: {}", e))?;
+        .map_err(|e| {
+            log::error!("api_key_set: set_password failed: {:?}", e);
+            format!("keyring error: {}", e)
+        })?;
+    log::info!("api_key_set SUCCESS for {}", key_name);
     Ok(())
 }
 

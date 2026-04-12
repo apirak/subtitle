@@ -407,7 +407,17 @@ class Speech {
   };
 
   saveApiKey = async (keyName: string, keyValue: string) => {
-    await invoke('api_key_set', { key_name: keyName, key_value: keyValue });
+    console.log('saveApiKey called:', keyName, 'value length:', keyValue.length);
+    if (!keyValue || !keyValue.trim()) {
+      console.error('saveApiKey: empty or whitespace API key, skipping');
+      return;
+    }
+    try {
+      const result = await invoke('api_key_set', { keyName, keyValue });
+      console.log('saveApiKey: invoke succeeded, result:', result);
+    } catch (e) {
+      console.error('saveApiKey: invoke failed', e);
+    }
   };
 }
 

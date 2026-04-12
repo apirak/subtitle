@@ -153,6 +153,7 @@
     onApiKeyChange={(v) => {
       apiKey = v;
       speech.saveApiKey('remote', v).catch(console.error);
+      speech.saveSetting('remote_api_key_name', 'remote').catch(console.error);
     }}
   />
 </div>

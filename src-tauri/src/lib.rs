@@ -14,15 +14,38 @@ async fn remote_asr_start(
     app: tauri::AppHandle,
     audio_state: State<'_, audio::AudioState>,
 ) -> Result<(), String> {
+    log::info!("remote_asr_start called");
     let settings = commands::settings_get(app.clone()).await?;
+    log::info!("settings loaded: engine={}, remote_endpoint={:?}", settings.asr_engine, settings.remote_endpoint);
 
     let endpoint = match settings.remote_endpoint {
-        Some(ep) if !ep.is_empty() => ep,
-        _ => return Err("No remote endpoint configured".to_string()),
+        Some(ep) if !ep.is_empty() => {
+            log::info!("using endpoint: {}", ep);
+            ep
+        }
+        _ => {
+            log::warn!("No remote endpoint configured - remote_endpoint is: {:?}", settings.remote_endpoint);
+            return Err("No remote endpoint configured".to_string());
+        }
     };
 
-    let api_key = commands::api_key_get("remote".to_string()).await?
-        .ok_or("No API key configured".to_string())?;
+    log::info!("Fetching API key...");
+    let api_key = match settings.remote_api_key_name.as_deref() {
+        Some(key_name) if !key_name.is_empty() => {
+            log::info!("Looking up API key name: {}", key_name);
+            commands::api_key_get(key_name.to_string()).await?
+                .ok_or_else(|| {
+                    log::error!("No API key found in keyring for '{}'", key_name);
+                    "No API key configured".to_string()
+                })?
+        }
+        _ => {
+            log::error!("No API key name configured");
+            return Err("No API key configured".to_string());
+        }
+    };
+
+    log::info!("API key found, length: {}", api_key.len());
 
     let receiver = audio_state.take_receiver()
         .ok_or("Audio capture not started or receiver already taken".to_string())?;
