@@ -397,6 +397,14 @@ class Speech {
       throw err;
     }
   };
+
+  saveSetting = async (key: string, value: string | number) => {
+    const stringValue = typeof value === 'number' ? String(value) : value;
+    await invoke('set_setting', { key, value: stringValue });
+    if (key === 'remote_endpoint') {
+      this.remoteEndpoint = stringValue;
+    }
+  };
 }
 
 function appendSubtitle(

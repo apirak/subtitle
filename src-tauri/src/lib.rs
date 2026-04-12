@@ -14,7 +14,7 @@ async fn remote_asr_start(
     app: tauri::AppHandle,
     audio_state: State<'_, audio::AudioState>,
 ) -> Result<(), String> {
-    let settings = commands::settings_get().await?;
+    let settings = commands::settings_get(app.clone()).await?;
 
     let endpoint = match settings.remote_endpoint {
         Some(ep) if !ep.is_empty() => ep,
@@ -57,6 +57,7 @@ pub fn run() {
             .build(),
         )?;
       }
+      app.handle().plugin(tauri_plugin_store::Builder::default().build())?;
       app.manage(audio::AudioState::new());
       app.manage(vosk::VoskAsr::new());
       app.manage(RemoteAsrState { is_running: false });

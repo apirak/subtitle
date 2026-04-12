@@ -141,6 +141,10 @@
     }}
     engine={speech.engine}
     onEngineChange={(v) => speech.setEngine(v as 'browser' | 'vosk' | 'remote')}
+    remoteEndpoint={remoteEndpoint}
+    onRemoteEndpointChange={(v) => remoteEndpoint = v}
+    apiKey={apiKey}
+    onApiKeyChange={(v) => apiKey = v}
   />
 </div>
 

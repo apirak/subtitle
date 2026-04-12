@@ -19,6 +19,10 @@
     onFontSizeChange: (value: number) => void;
     engine: string;
     onEngineChange: (engine: string) => void;
+    remoteEndpoint: string;
+    onRemoteEndpointChange: (value: string) => void;
+    apiKey: string;
+    onApiKeyChange: (value: string) => void;
   }
 
   let {
@@ -38,6 +42,10 @@
     onFontSizeChange,
     engine,
     onEngineChange,
+    remoteEndpoint,
+    onRemoteEndpointChange,
+    apiKey,
+    onApiKeyChange,
   }: Props = $props();
 
   const sourceOptions = SOURCE_LANGUAGES.map((l) => ({ value: l.code, label: l.label }));
@@ -166,6 +174,38 @@
         <label class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" for="asr-engine">ASR Engine</label>
         <Dropdown id="asr-engine" value={engine} options={engineOptions} onchange={onEngineChange} />
       </div>
+
+      {#if engine === 'remote'}
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" for="remote-endpoint">
+            API Endpoint
+          </label>
+          <input
+            id="remote-endpoint"
+            type="url"
+            placeholder="https://api.example.com/v1/audio/transcriptions"
+            value={remoteEndpoint}
+            oninput={(e) => onRemoteEndpointChange((e.target as HTMLInputElement).value)}
+            class="w-full px-3 py-2 bg-[rgba(255,255,255,0.06)] border border-white/10 rounded-lg text-white/80 text-sm placeholder:text-white/20 focus:outline-none focus:border-white/30"
+          />
+          <p class="text-[0.65rem] text-white/30">OpenAI-compatible transcription endpoint URL</p>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" for="api-key">
+            API Key
+          </label>
+          <input
+            id="api-key"
+            type="password"
+            placeholder="sk-..."
+            value={apiKey}
+            oninput={(e) => onApiKeyChange((e.target as HTMLInputElement).value)}
+            class="w-full px-3 py-2 bg-[rgba(255,255,255,0.06)] border border-white/10 rounded-lg text-white/80 text-sm placeholder:text-white/20 focus:outline-none focus:border-white/30"
+          />
+          <p class="text-[0.65rem] text-white/30">Stored securely in OS keychain</p>
+        </div>
+      {/if}
     </div>
   </div>
 </div>

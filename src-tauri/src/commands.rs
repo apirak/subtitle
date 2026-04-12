@@ -3,6 +3,7 @@ use keyring::Entry;
 use crate::audio;
 use crate::vosk::VoskAsr;
 use tauri::{Emitter, State, AppHandle};
+use tauri_plugin_store::StoreExt;
 
 /// Service name used for keyring entries
 const SERVICE_NAME: &str = "subtitle-app";
@@ -64,20 +65,78 @@ pub async fn translate(text: String, source_lang: String, target_lang: String) -
 }
 
 #[tauri::command]
-pub async fn settings_get() -> Result<Settings, String> {
+pub async fn settings_get(app: tauri::AppHandle) -> Result<Settings, String> {
+    let store = app.store("settings.json").map_err(|e| e.to_string())?;
+    
+    fn opt_str_to_string(opt: Option<&str>) -> String {
+        opt.map(String::from).unwrap_or_else(|| "browser".to_string())
+    }
+    
+    let asr_engine = match store.get("engine") {
+        Some(v) => opt_str_to_string(v.as_str()),
+        None => "browser".to_string(),
+    };
+    let source_lang = match store.get("source_lang") {
+        Some(v) => opt_str_to_string(v.as_str()),
+        None => "en-US".to_string(),
+    };
+    let target_lang = match store.get("target_lang") {
+        Some(v) => opt_str_to_string(v.as_str()),
+        None => "es".to_string(),
+    };
+    let overlay_transparency = store.get("overlay_transparency")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.7) as f32;
+    let overlay_font_size = store.get("overlay_font_size")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(24) as u32;
+    let remote_endpoint = match store.get("remote_endpoint") {
+        Some(v) => v.as_str().map(String::from),
+        None => None,
+    };
+    let remote_api_key_name = match store.get("remote_api_key_name") {
+        Some(v) => v.as_str().map(String::from),
+        None => None,
+    };
+    
     Ok(Settings {
-        asr_engine: "none".to_string(),
-        source_lang: "en".to_string(),
-        target_lang: "es".to_string(),
-        overlay_transparency: 0.7,
-        overlay_font_size: 24,
-        remote_endpoint: None,
-        remote_api_key_name: None,
+        asr_engine,
+        source_lang,
+        target_lang,
+        overlay_transparency,
+        overlay_font_size,
+        remote_endpoint,
+        remote_api_key_name,
     })
 }
 
 #[tauri::command]
-pub async fn settings_set(settings: Settings) -> Result<(), String> {
+pub async fn settings_set(app: tauri::AppHandle, key: String, value: String) -> Result<(), String> {
+    let store = app.store("settings.json").map_err(|e| e.to_string())?;
+    
+    // Determine type and store appropriately
+    match key.as_str() {
+        "engine" | "source_lang" | "target_lang" | "remote_endpoint" | "remote_api_key_name" | "translation_engine" | "source_language" => {
+            store.set(key, serde_json::Value::String(value));
+        }
+        "overlay_transparency" => {
+            if let Ok(v) = value.parse::<f64>() {
+                let num = serde_json::Number::from_f64(v)
+                    .unwrap_or_else(|| serde_json::Number::from(0));
+                store.set(key, serde_json::Value::Number(num));
+            }
+        }
+        "overlay_font_size" | "subtitle_position" => {
+            if let Ok(v) = value.parse::<u64>() {
+                store.set(key, serde_json::Value::Number(serde_json::Number::from(v)));
+            }
+        }
+        _ => {
+            store.set(key, serde_json::Value::String(value));
+        }
+    }
+    
+    store.save().map_err(|e| e.to_string())?;
     Ok(())
 }
 
