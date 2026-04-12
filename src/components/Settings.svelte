@@ -11,6 +11,14 @@
     subtitlePosition: number;
     onSubtitlePositionChange: (pos: number) => void;
     onClose: () => void;
+    translationEngine: string;
+    onTranslationEngineChange: (engine: string) => void;
+    overlayTransparency: number;
+    onOverlayTransparencyChange: (value: number) => void;
+    fontSize: number;
+    onFontSizeChange: (value: number) => void;
+    engine: string;
+    onEngineChange: (engine: string) => void;
   }
 
   let {
@@ -22,10 +30,29 @@
     subtitlePosition,
     onSubtitlePositionChange,
     onClose,
+    translationEngine,
+    onTranslationEngineChange,
+    overlayTransparency,
+    onOverlayTransparencyChange,
+    fontSize,
+    onFontSizeChange,
+    engine,
+    onEngineChange,
   }: Props = $props();
 
   const sourceOptions = SOURCE_LANGUAGES.map((l) => ({ value: l.code, label: l.label }));
   const targetOptions = TARGET_LANGUAGES.map((l) => ({ value: l.value, label: l.label }));
+  const engineOptions = [
+    { value: 'browser', label: 'Browser (Web Speech API)' },
+    { value: 'vosk', label: 'Vosk (On-Device)' },
+    { value: 'remote', label: 'Remote (API)' },
+  ];
+  const translationEngineOptions = [
+    { value: 'none', label: 'None' },
+    { value: 'ollama', label: 'Ollama (Local)' },
+    { value: 'nllb', label: 'NLLB (On-Device)' },
+    { value: 'remote', label: 'Remote (API)' },
+  ];
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -39,7 +66,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="w-full max-w-[420px] bg-[rgba(28,28,30,0.95)] backdrop-blur-[40px] rounded-t-[20px] transition-transform duration-[350ms]"
+    class="w-full max-w-[420px] max-h-[540px] bg-[rgba(28,28,30,0.95)] backdrop-blur-[40px] rounded-t-[20px] transition-transform duration-[350ms] overflow-y-auto"
     style="padding: 0 0 40px;"
     style:transform={open ? 'translateY(0)' : 'translateY(100%)'}
     style:transition-timing-function="cubic-bezier(0.32, 0.72, 0, 1)"
@@ -85,6 +112,59 @@
           <span>Bottom</span>
           <span>Top</span>
         </div>
+      </div>
+
+      <!-- TRANSLATION SECTION -->
+      <div class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]">Translation</div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" for="translation-engine">Translation Engine</label>
+        <Dropdown id="translation-engine" value={translationEngine} options={translationEngineOptions} onchange={onTranslationEngineChange} />
+      </div>
+
+      <!-- OVERLAY APPEARANCE SECTION -->
+      <div class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]">Overlay Appearance</div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" for="overlay-transparency">Overlay Transparency — {overlayTransparency}%</label>
+        <input
+          id="overlay-transparency"
+          type="range"
+          min={0}
+          max={100}
+          value={overlayTransparency}
+          oninput={(e) => onOverlayTransparencyChange(Number((e.target as HTMLInputElement).value))}
+          class="slider"
+        />
+        <div class="flex justify-between text-[0.65rem] text-white/20">
+          <span>Invisible</span>
+          <span>Opaque</span>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" for="font-size">Font Size — {fontSize}px</label>
+        <input
+          id="font-size"
+          type="range"
+          min={12}
+          max={48}
+          value={fontSize}
+          oninput={(e) => onFontSizeChange(Number((e.target as HTMLInputElement).value))}
+          class="slider"
+        />
+        <div class="flex justify-between text-[0.65rem] text-white/20">
+          <span>12px</span>
+          <span>48px</span>
+        </div>
+      </div>
+
+      <!-- ADVANCED SECTION -->
+      <div class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" style="margin-top: 8px;">Advanced</div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" for="asr-engine">ASR Engine</label>
+        <Dropdown id="asr-engine" value={engine} options={engineOptions} onchange={onEngineChange} />
       </div>
     </div>
   </div>

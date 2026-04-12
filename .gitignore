@@ -15,8 +15,8 @@ dist-ssr
 # Environment variables
 .env
 
-# Model files (download with: pnpm model)
-public/models/
+# Model files (download with: mise task download-vosk-model)
+src-tauri/vosk-model/
 
 # Editor directories and files
 .vscode/*
@@ -28,3 +28,6 @@ public/models/
 *.njsproj
 *.sln
 *.sw?
+
+# gsd
+.planning/

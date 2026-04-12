@@ -1,20 +1,61 @@
 <script lang="ts">
+  import { onDestroy, onMount } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
   import { speech } from './lib/speech.svelte';
-  import { SOURCE_LANGUAGES, TARGET_LANGUAGES, getLangName } from './lib/languages';
+  import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from './lib/languages';
   import IdleScreen from './components/IdleScreen.svelte';
   import ListeningScreen from './components/ListeningScreen.svelte';
   import ErrorScreen from './components/ErrorScreen.svelte';
   import Settings from './components/Settings.svelte';
   import './app.css';
 
+  onDestroy(() => {
+    speech.destroy();
+  });
+
   let targetLang = $state('th');
   let translations = $state<Record<string, string>>({});
   let settingsOpen = $state(false);
   let subtitlePosition = $state(20);
+  let selectedEngine = $state<'browser' | 'vosk'>('browser');
+  let remoteEndpoint = $state('');
+  let modelPath = $state('');
+  let apiKey = $state('');
+  let overlayTransparency = $state(80);
+  let fontSize = $state(24);
+  let translationEngine = $state('none');
 
   const translatedIds = new Set<string>();
   const inFlight = new Set<string>();
   const recentLines: string[] = [];
+
+  onMount(async () => {
+    try {
+      const settings = await invoke<{
+        engine: string;
+        source_lang: string;
+        target_lang: string;
+        subtitle_position: number;
+        remote_endpoint: string | null;
+        model_path: string | null;
+        overlay_transparency: number | null;
+        font_size: number | null;
+        translation_engine: string | null;
+      }>('settings_get');
+      selectedEngine = settings.engine as 'browser' | 'vosk';
+      speech.engine = settings.engine as 'browser' | 'vosk';
+      speech.language = settings.source_lang;
+      targetLang = settings.target_lang;
+      subtitlePosition = settings.subtitle_position;
+      remoteEndpoint = settings.remote_endpoint ?? '';
+      modelPath = settings.model_path ?? '';
+      overlayTransparency = settings.overlay_transparency ?? 80;
+      fontSize = settings.font_size ?? 24;
+      translationEngine = settings.translation_engine ?? 'none';
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  });
 
   let sourceLabel = $derived(
     SOURCE_LANGUAGES.find((l) => l.code === speech.language)?.label ?? 'Auto'
@@ -36,53 +77,13 @@
   async function translateLine(id: string, text: string) {
     if (!targetLang || inFlight.has(id)) return;
 
-    const apiKey = import.meta.env.VITE_DEEPINFRA_API_KEY;
-    if (!apiKey) return;
-
-    const langName = getLangName(targetLang);
-    const context = recentLines.slice(-2);
-
-    let prompt: string;
-    if (context.length > 0) {
-      prompt = `/no_think
-Translate the last sentence to ${langName}. The previous sentences are for context only — do not translate them.
-
-Context:
-${context.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
-Translate this:
-${text}
-
-Return only the translation.`;
-    } else {
-      prompt = `/no_think\nTranslate to ${langName}. Return only the translation.\n\n${text}`;
-    }
-
     recentLines.push(text);
     if (recentLines.length > 3) recentLines.shift();
 
     inFlight.add(id);
 
     try {
-      const res = await fetch('https://api.deepinfra.com/v1/openai/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'Qwen/Qwen3-14B',
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-
-      if (!res.ok) return;
-
-      const data = await res.json();
-      const msg = data.choices?.[0]?.message;
-      const raw = String(msg?.content || msg?.reasoning_content || '').trim();
-      const result = raw.replace(/<think[\s\S]*?<\/think>/g, '').trim();
-
+      const result = await speech.translate(text, speech.language, targetLang);
       if (result) {
         translations[id] = result;
       }
@@ -123,6 +124,23 @@ Return only the translation.`;
     {subtitlePosition}
     onSubtitlePositionChange={(v) => subtitlePosition = v}
     onClose={() => settingsOpen = false}
+    {overlayTransparency}
+    onOverlayTransparencyChange={(v) => {
+      overlayTransparency = v;
+      speech.saveSetting?.('overlay_transparency', v).catch(console.error);
+    }}
+    {fontSize}
+    onFontSizeChange={(v) => {
+      fontSize = v;
+      speech.saveSetting?.('font_size', v).catch(console.error);
+    }}
+    {translationEngine}
+    onTranslationEngineChange={(v) => {
+      translationEngine = v;
+      speech.saveSetting?.('translation_engine', v).catch(console.error);
+    }}
+    engine={speech.engine}
+    onEngineChange={(v) => speech.setEngine(v as 'browser' | 'vosk' | 'remote')}
   />
 </div>
 
