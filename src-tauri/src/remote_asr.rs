@@ -1,7 +1,11 @@
 use tokio::sync::mpsc;
 use tauri::{AppHandle, Emitter};
 use serde::Deserialize;
-use crate::commands::api_key_get;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+// Shared cancellation flag — set to true to signal the async loop to exit
+static STOP_FLAG: AtomicBool = AtomicBool::new(false);
 
 const MAX_RETRIES: u32 = 3;
 const REQUEST_TIMEOUT_SECS: u64 = 5;
@@ -182,6 +186,9 @@ pub async fn remote_asr_start(
     api_key: String,
     source_lang: String,
 ) -> Result<(), String> {
+    // Reset stop flag at start
+    STOP_FLAG.store(false, Ordering::SeqCst);
+
     let client = reqwest::Client::new();
     let language = Some(source_lang);
 
@@ -194,6 +201,19 @@ pub async fn remote_asr_start(
 
         loop {
             tokio::select! {
+                // NEW: Check for stop signal on each iteration
+                _ = tokio::time::sleep(tokio::time::Duration::from_millis(50)) => {
+                    if STOP_FLAG.load(Ordering::SeqCst) {
+                        // Flush any remaining buffer before exiting
+                        if !buffer.is_empty() {
+                            let i16_samples = f32_to_i16(&buffer);
+                            let audio_wav = encode_wav(&i16_samples, 16000);
+                            let _ = transcribe_with_retry(&client, &endpoint, &api_key, &audio_wav, language.as_deref()).await;
+                        }
+                        state.set_running(false);
+                        break;
+                    }
+                }
                 Some(chunk) = audio_receiver.recv() => {
                     last_sample_time = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
@@ -316,6 +336,15 @@ pub async fn remote_asr_start(
 }
 
 pub async fn remote_asr_stop() -> Result<(), String> {
+    // Set the stop flag to signal the spawned task to exit
+    STOP_FLAG.store(true, Ordering::SeqCst);
+    
+    // Give the task a moment to process the signal and exit
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    
+    // Reset the flag for potential future use
+    STOP_FLAG.store(false, Ordering::SeqCst);
+    
     Ok(())
 }
 
