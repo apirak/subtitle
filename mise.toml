@@ -1,0 +1,47 @@
+[tools]
+pnpm = "10"
+rust = "1"
+
+[tasks.download-vosk-lib]
+description = "Download Vosk native library for current platform"
+run = '''
+VOSK_VERSION="0.3.42"
+LIB_DIR="src-tauri/.vosklib"
+
+if [ "$(uname -s)" = "Linux" ]; then
+  PLATFORM="linux-x86_64"
+  ZIP_NAME="vosk-linux-x86_64-${VOSK_VERSION}.zip"
+  LIB_FILE="libvosk.so"
+elif [ "$(uname -s)" = "Darwin" ]; then
+  PLATFORM="macos-arm64"
+  ZIP_NAME="vosk-osx-${VOSK_VERSION}.zip"
+  LIB_FILE="libvosk.dylib"
+elif [ "$(uname -s)" = "MINGW32" ] || [ "$(uname -s)" = "MINGW64" ] || [ "$(uname -s)" = "CYGWIN" ]; then
+  PLATFORM="windows-x86_64"
+  ZIP_NAME="vosk-win64-${VOSK_VERSION}.zip"
+  LIB_FILE="vosk.dll"
+else
+  echo "Unsupported OS: $(uname -s)"
+  exit 1
+fi
+
+DEST_DIR="${LIB_DIR}/${PLATFORM}"
+mkdir -p "${DEST_DIR}"
+
+TMP_DIR=$(mktemp -d)
+curl -L "https://github.com/alphacep/vosk-api/releases/download/v${VOSK_VERSION}/${ZIP_NAME}" \
+  -o "${TMP_DIR}/${ZIP_NAME}"
+unzip -o "${TMP_DIR}/${ZIP_NAME}" -d "${TMP_DIR}/extracted"
+
+find "${TMP_DIR}/extracted" -name "${LIB_FILE}" -exec cp {} "${DEST_DIR}/${LIB_FILE}" \;
+find "${TMP_DIR}/extracted" -name "vosk_api.h" -exec cp {} "${DEST_DIR}/vosk_api.h" \;
+
+if [ "$(uname -s)" = "Darwin" ]; then
+  install_name_tool -id @rpath/libvosk.dylib "${DEST_DIR}/${LIB_FILE}"
+fi
+
+chmod +x "${DEST_DIR}/${LIB_FILE}" 2>/dev/null || true
+
+rm -rf "${TMP_DIR}"
+echo "Vosk native library installed to ${DEST_DIR}/${LIB_FILE}"
+'''

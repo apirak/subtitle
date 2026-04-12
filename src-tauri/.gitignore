@@ -2,3 +2,8 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
+
+# Vosk native libraries (downloaded per-platform via `mise run download-vosk-lib`)
+.vosklib/*/libvosk.so
+.vosklib/*/libvosk.dylib
+.vosklib/*/vosk.dll
