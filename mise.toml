@@ -2,18 +2,6 @@
 pnpm = "10"
 rust = "1"
 
-[tasks.download-vosk-model]
-description = "Download Vosk model for on-device ASR"
-run = '''
-mkdir -p src-tauri/vosk-model
-cd src-tauri/vosk-model
-curl -L "https://alphacephei.com/kaldi/models/vosk-model-us-en-0.4.zip" -o vosk-model.zip
-unzip -o vosk-model.zip
-mv vosk-model-us-en-0.4/* .
-rm -rf vosk-model-us-en-0.4 vosk-model.zip
-'''
-depends = ["check-vosk-model"]
-
 [tasks.download-vosk-lib]
 description = "Download Vosk native library for current platform"
 run = '''
@@ -57,7 +45,3 @@ chmod +x "${DEST_DIR}/${LIB_FILE}" 2>/dev/null || true
 rm -rf "${TMP_DIR}"
 echo "Vosk native library installed to ${DEST_DIR}/${LIB_FILE}"
 '''
-
-[tasks.check-vosk-model]
-description = "Check if Vosk model exists"
-run = '''test -d src-tauri/vosk-model/am && test -d src-tauri/vosk-model/graph && echo "Vosk model found" || echo "Vosk model missing"'''
