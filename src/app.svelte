@@ -17,7 +17,7 @@
   let translations = $state<Record<string, string>>({});
   let settingsOpen = $state(false);
   let subtitlePosition = $state(20);
-  let selectedEngine = $state<'browser' | 'vosk'>('browser');
+  let selectedEngine = $state<'browser' | 'vosk' | 'remote'>('browser');
   let remoteEndpoint = $state('');
   let modelPath = $state('');
   let apiKey = $state('');
@@ -140,11 +140,20 @@
       speech.saveSetting?.('translation_engine', v).catch(console.error);
     }}
     engine={speech.engine}
-    onEngineChange={(v) => speech.setEngine(v as 'browser' | 'vosk' | 'remote')}
+    onEngineChange={(v) => {
+      speech.setEngine(v as 'browser' | 'vosk' | 'remote');
+      speech.saveSetting('engine', v).catch(console.error);
+    }}
     remoteEndpoint={remoteEndpoint}
-    onRemoteEndpointChange={(v) => remoteEndpoint = v}
+    onRemoteEndpointChange={(v) => {
+      remoteEndpoint = v;
+      speech.saveSetting('remote_endpoint', v).catch(console.error);
+    }}
     apiKey={apiKey}
-    onApiKeyChange={(v) => apiKey = v}
+    onApiKeyChange={(v) => {
+      apiKey = v;
+      speech.saveApiKey('remote', v).catch(console.error);
+    }}
   />
 </div>
 

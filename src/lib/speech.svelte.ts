@@ -400,10 +400,14 @@ class Speech {
 
   saveSetting = async (key: string, value: string | number) => {
     const stringValue = typeof value === 'number' ? String(value) : value;
-    await invoke('set_setting', { key, value: stringValue });
+    await invoke('settings_set', { key, value: stringValue });
     if (key === 'remote_endpoint') {
       this.remoteEndpoint = stringValue;
     }
+  };
+
+  saveApiKey = async (keyName: string, keyValue: string) => {
+    await invoke('api_key_set', { key_name: keyName, key_value: keyValue });
   };
 }
 
