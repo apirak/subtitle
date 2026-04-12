@@ -103,7 +103,7 @@ class Speech {
 
   addInterimSubtitle = (id: string, text: string) => {
     const interimId = `interim-${id}`;
-    this.subtitles = appendSubtitle(this.subtitles, null, {
+    this.subtitles = appendSubtitle(this.subtitles, interimId, {
       id: interimId,
       text,
       timestamp: Date.now(),
@@ -205,13 +205,14 @@ class Speech {
       }
 
       this._subtitleUnlisten = await listen<{ text: string; timestamp: number; is_final: boolean }>('subtitle', (event) => {
-        const { text, timestamp } = event.payload;
+        const { text, timestamp, is_final } = event.payload;
         if (!text || !text.trim()) return;
-        this.subtitles = appendSubtitle(this.subtitles, null, {
-          id: `${timestamp}-${Math.random()}`,
-          text: text.trim(),
-          timestamp,
-        });
+        const id = `remote-${timestamp}`;
+        if (is_final) {
+          this.addFinalSubtitle(id, text.trim());
+        } else {
+          this.addInterimSubtitle(id, text.trim());
+        }
       });
 
       this._errorUnlisten = await listen<{ message: string; retryable: boolean }>('asr-error', (event) => {
