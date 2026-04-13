@@ -9,9 +9,10 @@
     targetLabel: string;
     subtitlePosition: number;
     onStop: () => void;
+    isMockMode?: boolean;
   }
 
-  let { subtitles, translations, sourceLabel, targetLabel, subtitlePosition, onStop }: Props = $props();
+  let { subtitles, translations, sourceLabel, targetLabel, subtitlePosition, onStop, isMockMode = false }: Props = $props();
 </script>
 
 <svelte:head>
@@ -21,7 +22,7 @@
 <div class="status-bar">
   <div class="status-indicator">
     <span class="status-dot"></span>
-    Listening…
+    {isMockMode ? 'Mock Preview' : 'Listening…'}
     <span class="lang-badge">{sourceLabel} → {targetLabel}</span>
   </div>
   <button class="stop" onclick={onStop}>Stop</button>

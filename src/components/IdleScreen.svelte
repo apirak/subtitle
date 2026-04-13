@@ -16,7 +16,7 @@
   </div>
 
   <button
-    class="flex items-center justify-center gap-2 text-base font-semibold text-white bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.12)] rounded-[60px] cursor-pointer transition-all duration-[250ms] ease backdrop-blur-md hover:bg-[rgba(255,255,255,0.15)] hover:border-[rgba(255,255,255,0.25)] hover:scale-[1.03] hover:shadow-[0_0_30px_rgba(255,255,255,0.06)] active:scale-[0.97]"
+    class="flex items-center justify-center gap-2 text-base font-semibold text-white bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.12)] rounded-[60px] cursor-pointer transition-all duration-250 ease backdrop-blur-md hover:bg-[rgba(255,255,255,0.15)] hover:border-[rgba(255,255,255,0.25)] hover:scale-[1.03] hover:shadow-[0_0_30px_rgba(255,255,255,0.06)] active:scale-[0.97]"
     style="padding: 14px 32px;"
     onclick={onStart}
   >
@@ -29,7 +29,7 @@
   </button>
 
   <button
-    class="flex items-center justify-center w-8 h-8 rounded-full bg-transparent border-0 text-white/20 cursor-pointer transition-all duration-200 ease hover:text-white/45 hover:rotate-[30deg]"
+    class="flex items-center justify-center w-8 h-8 rounded-full bg-transparent border-0 text-white/20 cursor-pointer transition-all duration-200 ease hover:text-white/45 hover:rotate-30"
     onclick={onSettings}
     aria-label="Settings"
   >
