@@ -66,9 +66,9 @@ pub async fn translate(text: String, source_lang: String, target_lang: String) -
 #[tauri::command]
 pub async fn settings_get() -> Result<Settings, String> {
     Ok(Settings {
-        asr_engine: "none".to_string(),
-        source_lang: "en".to_string(),
-        target_lang: "es".to_string(),
+        asr_engine: "browser".to_string(),
+        source_lang: "en-US".to_string(),
+        target_lang: "th".to_string(),
         overlay_transparency: 0.7,
         overlay_font_size: 24,
         remote_endpoint: None,
