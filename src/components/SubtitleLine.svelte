@@ -9,9 +9,9 @@
   let { text, translation, isTranslating = false, isLast = false }: Props = $props();
 </script>
 
-<div class="line flex text-3xl text-white text-left gap-4 p-4" class:last={isLast}>
-  <div class="flex-1 flex justify-center items-center">{text}</div>
-  <div class="flex-1 flex justify-center items-center">
+<div class="line flex text-3xl text-white gap-16 p-4" class:last={isLast}>
+  <div class="flex-1 flex justify-center text-center">{text}</div>
+  <div class="flex-1 flex justify-center text-center">
     {#if isTranslating}
       <div class="text-white/80">
         <span class="dot">·</span>

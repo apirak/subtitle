@@ -28,7 +28,7 @@
   <button class="stop" onclick={onStop}>Stop</button>
 </div>
 
-<div class="flex flex-col overflow-y-auto gap-2" style="bottom: {subtitlePosition}%">
+<div class="fixed left-0 right-0 flex flex-col overflow-y-auto gap-2 px-4" style="bottom: {subtitlePosition}%">
   {#each subtitles as line, i}
     <SubtitleLine
       text={line.text}
