@@ -48,20 +48,22 @@
     const loadSettings = async () => {
       try {
         const settings = await invoke<{
-          engine: string;
-          source_lang: string;
-          target_lang: string;
-          subtitle_position: number;
+          engine?: string;
+          source_lang?: string;
+          target_lang?: string;
+          subtitle_position?: number | null;
           remote_endpoint: string | null;
           model_path: string | null;
           overlay_transparency: number | null;
           font_size: number | null;
           translation_engine: string | null;
         }>('settings_get');
-        speech.engine = settings.engine as 'browser' | 'vosk';
-        speech.language = settings.source_lang;
-        targetLang = settings.target_lang;
-        subtitlePosition = settings.subtitle_position;
+        speech.engine = (settings.engine ?? 'browser') as 'browser' | 'vosk';
+        speech.language = settings.source_lang ?? 'en-US';
+        targetLang = settings.target_lang ?? 'th';
+        subtitlePosition = Number.isFinite(settings.subtitle_position)
+          ? Number(settings.subtitle_position)
+          : 20;
         overlayTransparency = settings.overlay_transparency ?? 80;
         fontSize = settings.font_size ?? 24;
         translationEngine = settings.translation_engine ?? 'none';
@@ -157,7 +159,7 @@
   <title>Real-time Subtitles</title>
 </svelte:head>
 
-<div class="w-full h-screen flex flex-col items-center justify-center relative overflow-hidden">
+<div class="w-full h-screen flex flex-col justify-center relative overflow-hidden">
   {#if speech.status === 'idle'}
     <IdleScreen {sourceLabel} {targetLabel} onStart={handleStart} onSettings={() => settingsOpen = true} />
   {:else if speech.status === 'listening'}

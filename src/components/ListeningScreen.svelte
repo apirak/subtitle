@@ -19,7 +19,7 @@
   <title>Listening… · Real-time Subtitles</title>
 </svelte:head>
 
-<div class="status-bar">
+<div class="status-bar bg-black/5 backdrop-blur-md">
   <div class="status-indicator">
     <span class="status-dot"></span>
     {isMockMode ? 'Mock Preview' : 'Listening…'}
@@ -28,7 +28,7 @@
   <button class="stop" onclick={onStop}>Stop</button>
 </div>
 
-<div class="subtitle-container" style="bottom: {subtitlePosition}%">
+<div class="flex flex-col overflow-y-auto gap-2" style="bottom: {subtitlePosition}%">
   {#each subtitles as line, i}
     <SubtitleLine
       text={line.text}
@@ -98,18 +98,5 @@
     color: #fff;
     background: rgba(239, 68, 68, 0.15);
     border-color: rgba(239, 68, 68, 0.35);
-  }
-
-  .subtitle-container {
-    position: fixed;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 0 24px;
-    pointer-events: auto;
   }
 </style>
