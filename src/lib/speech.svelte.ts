@@ -1,6 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { AppStatus, SubtitleLine } from './types';
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { AppStatus, SubtitleLine } from "./types";
 
 const MAX_SUBTITLES = 12;
 
@@ -36,19 +36,21 @@ interface SpeechRecognitionErrorEvent {
 }
 
 function createRecognition(): SpeechRecognitionInstance | null {
-  const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+  const SR =
+    (window as any).SpeechRecognition ??
+    (window as any).webkitSpeechRecognition;
   if (!SR) return null;
   return new SR();
 }
 
 class Speech {
-  status = $state<AppStatus>('idle');
+  status = $state<AppStatus>("idle");
   subtitles = $state<SubtitleLine[]>([]);
-  language = $state('en-US');
-  errorMessage = $state('');
-  engine = $state<'browser' | 'vosk' | 'remote'>('browser');
-  remoteEndpoint = $state<string>('');
-  apiKey = $state<string>('');
+  language = $state("en-US");
+  errorMessage = $state("");
+  engine = $state<"browser" | "vosk" | "remote">("browser");
+  remoteEndpoint = $state<string>("");
+  apiKey = $state<string>("");
 
   private recognition: SpeechRecognitionInstance | null = null;
   private stopping = false;
@@ -66,38 +68,44 @@ class Speech {
   }
 
   private setupEventListeners = async () => {
-    this.unlistenUpdate = await listen<{ id: string; text: string; is_final: boolean; timestamp: number }>(
-      'backend://subtitle/update',
-      (event) => {
-        const payload = event.payload;
-        if (!payload.is_final) {
-          this.addInterimSubtitle(payload.id, payload.text);
-        }
+    this.unlistenUpdate = await listen<{
+      id: string;
+      text: string;
+      is_final: boolean;
+      timestamp: number;
+    }>("backend://subtitle/update", (event) => {
+      const payload = event.payload;
+      if (!payload.is_final) {
+        this.addInterimSubtitle(payload.id, payload.text);
       }
-    );
+    });
 
-    this.unlistenFinal = await listen<{ id: string; text: string; is_final: boolean; timestamp: number }>(
-      'backend://subtitle/final',
-      (event) => {
-        const payload = event.payload;
-        this.addFinalSubtitle(payload.id, payload.text);
-      }
-    );
+    this.unlistenFinal = await listen<{
+      id: string;
+      text: string;
+      is_final: boolean;
+      timestamp: number;
+    }>("backend://subtitle/final", (event) => {
+      const payload = event.payload;
+      this.addFinalSubtitle(payload.id, payload.text);
+    });
 
-    this.unlistenTranslated = await listen<{ id: string; original: string; translated: string; timestamp: number }>(
-      'backend://subtitle/translated',
-      (event) => {
-        const payload = event.payload;
-        this.setTranslation(payload.id, payload.original, payload.translated);
-      }
-    );
+    this.unlistenTranslated = await listen<{
+      id: string;
+      original: string;
+      translated: string;
+      timestamp: number;
+    }>("backend://subtitle/translated", (event) => {
+      const payload = event.payload;
+      this.setTranslation(payload.id, payload.original, payload.translated);
+    });
 
     this.unlistenError = await listen<{ code: string; message: string }>(
-      'backend://subtitle/error',
+      "backend://subtitle/error",
       (event) => {
         const payload = event.payload;
         this.setError(`${payload.code}: ${payload.message}`);
-      }
+      },
     );
   };
 
@@ -112,7 +120,9 @@ class Speech {
 
   addFinalSubtitle = (id: string, text: string) => {
     // Remove any interim subtitle with the same base id
-    const toRemove = [...this.subtitles].find((s) => s.id === `interim-${id}`)?.id;
+    const toRemove = [...this.subtitles].find(
+      (s) => s.id === `interim-${id}`,
+    )?.id;
     this.subtitles = appendSubtitle(this.subtitles, toRemove ?? null, {
       id,
       text,
@@ -120,14 +130,14 @@ class Speech {
     });
   };
 
-  setTranslation = (_id: string, _original: string, translated: string) => {
+  setTranslation = (_id: string, _original: string, _translated: string) => {
     // Translation storage is managed by app.svelte
     // This listener exists for future direct backend translation integration
   };
 
   setError = (message: string) => {
     this.errorMessage = message;
-    this.status = 'error';
+    this.status = "error";
   };
 
   destroy = () => {
@@ -137,10 +147,15 @@ class Speech {
     this.unlistenError?.();
   };
 
-  startCapture = async (): Promise<{ sample_rate: number; channels: number }> => {
-    if (this.engine === 'remote') {
+  startCapture = async (): Promise<{
+    sample_rate: number;
+    channels: number;
+  }> => {
+    if (this.engine === "remote") {
       try {
-        const result = await invoke<{ sample_rate: number; channels: number }>('audio_capture_start');
+        const result = await invoke<{ sample_rate: number; channels: number }>(
+          "audio_capture_start",
+        );
         return result;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -148,9 +163,11 @@ class Speech {
         throw err;
       }
     }
-    if (this.engine === 'vosk') {
+    if (this.engine === "vosk") {
       try {
-        const result = await invoke<{ sample_rate: number; channels: number }>('audio_capture_start');
+        const result = await invoke<{ sample_rate: number; channels: number }>(
+          "audio_capture_start",
+        );
         return result;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -159,7 +176,9 @@ class Speech {
       }
     }
     try {
-      const result = await invoke<{ sample_rate: number; channels: number }>('audio_capture_start');
+      const result = await invoke<{ sample_rate: number; channels: number }>(
+        "audio_capture_start",
+      );
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -169,42 +188,46 @@ class Speech {
   };
 
   stopCapture = async (): Promise<void> => {
-    if (this.engine === 'remote') {
+    if (this.engine === "remote") {
       try {
-        await invoke('remote_asr_stop');
+        await invoke("remote_asr_stop");
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error('Remote ASR stop error:', message);
+        console.error("Remote ASR stop error:", message);
       }
     }
-    if (this.engine === 'vosk') {
+    if (this.engine === "vosk") {
       try {
-        await invoke('vosk_stop');
+        await invoke("vosk_stop");
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error('Vosk stop error:', message);
+        console.error("Vosk stop error:", message);
       }
     }
     try {
-      await invoke('audio_capture_stop');
+      await invoke("audio_capture_stop");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('Audio capture stop error:', message);
+      console.error("Audio capture stop error:", message);
     }
   };
 
   start = async () => {
-    if (this.engine === 'remote') {
+    if (this.engine === "remote") {
       try {
         await this.startCapture();
-        await invoke('remote_asr_start');
+        await invoke("remote_asr_start");
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.setError(`Failed to start Remote ASR: ${message}`);
         return;
       }
 
-      this._subtitleUnlisten = await listen<{ text: string; timestamp: number; is_final: boolean }>('subtitle', (event) => {
+      this._subtitleUnlisten = await listen<{
+        text: string;
+        timestamp: number;
+        is_final: boolean;
+      }>("subtitle", (event) => {
         const { text, timestamp, is_final } = event.payload;
         if (!text || !text.trim()) return;
         const id = `remote-${timestamp}`;
@@ -215,23 +238,26 @@ class Speech {
         }
       });
 
-      this._errorUnlisten = await listen<{ message: string; retryable: boolean }>('asr-error', (event) => {
+      this._errorUnlisten = await listen<{
+        message: string;
+        retryable: boolean;
+      }>("asr-error", (event) => {
         const { message, retryable } = event.payload;
         this.errorMessage = message;
         if (!retryable) {
-          this.status = 'error';
+          this.status = "error";
         }
       });
 
       this.subtitles = [];
-      this.errorMessage = '';
-      this.status = 'listening';
+      this.errorMessage = "";
+      this.status = "listening";
       return;
     }
 
-    if (this.engine === 'vosk') {
+    if (this.engine === "vosk") {
       this.subtitles = [];
-      this.errorMessage = '';
+      this.errorMessage = "";
 
       try {
         await this.startCapture();
@@ -241,8 +267,8 @@ class Speech {
 
       try {
         // Load the Vosk model before starting recognition
-        const modelPath = await invoke<string>('vosk_get_model_path');
-        await invoke('vosk_load_model', { path: modelPath });
+        const modelPath = await invoke<string>("vosk_get_model_path");
+        await invoke("vosk_load_model", { path: modelPath });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.setError(`Failed to load Vosk model: ${message}`);
@@ -250,14 +276,14 @@ class Speech {
       }
 
       try {
-        await invoke('vosk_start');
+        await invoke("vosk_start");
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.setError(`Failed to start Vosk ASR: ${message}`);
         return;
       }
 
-      this.status = 'listening';
+      this.status = "listening";
       return;
     }
 
@@ -271,15 +297,16 @@ class Speech {
 
     const recognition = createRecognition();
     if (!recognition) {
-      this.errorMessage = 'Web Speech API is not supported in this browser. Try Safari or Chrome.';
-      this.status = 'error';
+      this.errorMessage =
+        "Web Speech API is not supported in this browser. Try Safari or Chrome.";
+      this.status = "error";
       return;
     }
 
     this.subtitles = [];
-    this.errorMessage = '';
+    this.errorMessage = "";
     this.stopping = false;
-    this.status = 'listening';
+    this.status = "listening";
 
     recognition.continuous = true;
     recognition.interimResults = true;
@@ -315,23 +342,29 @@ class Speech {
     };
 
     recognition.onerror = (event) => {
-      if (event.error === 'aborted' || event.error === 'no-speech') return;
+      if (event.error === "aborted" || event.error === "no-speech") return;
       hasErrored = true;
 
       const messages: Record<string, string> = {
-        network: 'No internet connection.',
-        'not-allowed': 'Microphone access denied. Please allow microphone permission.',
-        'audio-capture': 'No microphone found. Please connect a microphone.',
-        service: 'Speech service unavailable.',
+        network: "No internet connection.",
+        "not-allowed":
+          "Microphone access denied. Please allow microphone permission.",
+        "audio-capture": "No microphone found. Please connect a microphone.",
+        service: "Speech service unavailable.",
       };
 
-      this.errorMessage = messages[event.error] ?? `${event.error}: ${event.message}`;
-      this.status = 'error';
+      this.errorMessage =
+        messages[event.error] ?? `${event.error}: ${event.message}`;
+      this.status = "error";
     };
 
     recognition.onend = () => {
       if (!this.stopping && !hasErrored) {
-        try { recognition.start(); } catch { /* restart failed */ }
+        try {
+          recognition.start();
+        } catch {
+          /* restart failed */
+        }
       }
     };
 
@@ -340,10 +373,11 @@ class Speech {
     try {
       recognition.start();
     } catch (e) {
-      this.errorMessage = e instanceof Error ? e.message : 'Failed to start recognition';
-      this.status = 'error';
+      this.errorMessage =
+        e instanceof Error ? e.message : "Failed to start recognition";
+      this.status = "error";
     }
-  }
+  };
 
   stop = async () => {
     if (this._subtitleUnlisten) {
@@ -363,8 +397,8 @@ class Speech {
       this.recognition.stop();
       this.recognition = null;
     }
-    this.status = 'idle';
-  }
+    this.status = "idle";
+  };
 
   setLanguage = (lang: string) => {
     this.language = lang;
@@ -374,26 +408,33 @@ class Speech {
       this.recognition = null;
       setTimeout(() => this.start(), 100);
     }
-  }
+  };
 
-  setEngine = (engine: 'browser' | 'vosk' | 'remote') => {
+  setEngine = (engine: "browser" | "vosk" | "remote") => {
     this.engine = engine;
-    if (this.status === 'listening') {
+    if (this.status === "listening") {
       this.stop();
       setTimeout(() => this.start(), 100);
     }
-  }
+  };
 
-  translate = async (text: string, sourceLang: string, targetLang: string): Promise<string> => {
+  translate = async (
+    text: string,
+    sourceLang: string,
+    targetLang: string,
+  ): Promise<string> => {
     try {
-      const result = await invoke<{ original: string; translated: string }>('translate', {
-        text,
-        source_lang: sourceLang,
-        target_lang: targetLang,
-      });
+      const result = await invoke<{ original: string; translated: string }>(
+        "translate",
+        {
+          text,
+          source_lang: sourceLang,
+          target_lang: targetLang,
+        },
+      );
       return result.translated;
     } catch (err) {
-      console.error('Translation error:', err);
+      console.error("Translation error:", err);
       throw err;
     }
   };

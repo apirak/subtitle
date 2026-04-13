@@ -17,10 +17,6 @@
   let translations = $state<Record<string, string>>({});
   let settingsOpen = $state(false);
   let subtitlePosition = $state(20);
-  let selectedEngine = $state<'browser' | 'vosk'>('browser');
-  let remoteEndpoint = $state('');
-  let modelPath = $state('');
-  let apiKey = $state('');
   let overlayTransparency = $state(80);
   let fontSize = $state(24);
   let translationEngine = $state('none');
@@ -42,13 +38,10 @@
         font_size: number | null;
         translation_engine: string | null;
       }>('settings_get');
-      selectedEngine = settings.engine as 'browser' | 'vosk';
       speech.engine = settings.engine as 'browser' | 'vosk';
       speech.language = settings.source_lang;
       targetLang = settings.target_lang;
       subtitlePosition = settings.subtitle_position;
-      remoteEndpoint = settings.remote_endpoint ?? '';
-      modelPath = settings.model_path ?? '';
       overlayTransparency = settings.overlay_transparency ?? 80;
       fontSize = settings.font_size ?? 24;
       translationEngine = settings.translation_engine ?? 'none';
@@ -127,17 +120,17 @@
     {overlayTransparency}
     onOverlayTransparencyChange={(v) => {
       overlayTransparency = v;
-      speech.saveSetting?.('overlay_transparency', v).catch(console.error);
+      invoke('settings_set', { settings: { overlay_transparency: v } }).catch(console.error);
     }}
     {fontSize}
     onFontSizeChange={(v) => {
       fontSize = v;
-      speech.saveSetting?.('font_size', v).catch(console.error);
+      invoke('settings_set', { settings: { font_size: v } }).catch(console.error);
     }}
     {translationEngine}
     onTranslationEngineChange={(v) => {
       translationEngine = v;
-      speech.saveSetting?.('translation_engine', v).catch(console.error);
+      invoke('settings_set', { settings: { translation_engine: v } }).catch(console.error);
     }}
     engine={speech.engine}
     onEngineChange={(v) => speech.setEngine(v as 'browser' | 'vosk' | 'remote')}
