@@ -33,9 +33,20 @@ export const TARGET_LANGUAGES = [
 ] as const;
 
 const LANG_NAMES: Record<string, string> = {
-  en: 'English', th: 'Thai', zh: 'Chinese', ja: 'Japanese', ko: 'Korean',
-  es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese', ru: 'Russian',
-  ar: 'Arabic', hi: 'Hindi', vi: 'Vietnamese', id: 'Indonesian',
+  en: 'English',
+  th: 'Thai',
+  zh: 'Chinese',
+  ja: 'Japanese',
+  ko: 'Korean',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  pt: 'Portuguese',
+  ru: 'Russian',
+  ar: 'Arabic',
+  hi: 'Hindi',
+  vi: 'Vietnamese',
+  id: 'Indonesian',
 };
 
 export function getLangName(code: string): string {

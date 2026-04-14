@@ -1,0 +1,43 @@
+# lefthook.yml - Git hooks for subtitle project
+#
+# Install: pnpm lefthook install
+# Run manually: pnpm lefthook run pre-commit
+pre-push:
+  parallel: true
+  commands:
+    packages-audit: # Ignore for now due to unpatchable vulnerabilities from axios (imported from langchain)
+      tags: frontend security
+      run: pnpm audit --audit-level critical
+    tests:
+      tags: tests
+      run: pnpm t
+    rust-tests:
+      tags: tests
+      run: cd src-tauri && cargo test --lib
+    typecheck:
+      tags: tests
+      run: pnpm typecheck:native
+
+pre-commit:
+  parallel: true
+  commands:
+    typecheck:
+      tags: tests
+      run: pnpm typecheck:native
+    biome:
+      glob: "*.{ts,tsx,js,jsx,mjs,cjs,json}"
+      run: |
+        pnpm biome check --write {staged_files}
+        git add {staged_files}
+
+    prettier:
+      glob: "*.svelte"
+      run: |
+       pnpm prettier --write {staged_files}
+       git add {staged_files}
+
+    rustfmt:
+      glob: "*.rs"
+      run: |
+       rustfmt --edition 2021 {staged_files}
+       git add {staged_files}

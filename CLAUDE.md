@@ -23,7 +23,7 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 ## Runtime & Language Versions
 - TypeScript ~6.0.2 (target: ES2023, module: ESNext)
 - Svelte ^5.55.2 (using runes: `$state`, `$derived`, `$effect`, `$props`)
-- Rust Edition 2021 (minimum rust-version: 1.77.2)
+- Rust Edition 2021 (minimum rust-version: 1.85)
 - Crate type: `staticlib`, `cdylib`, `rlib`
 - Node.js v24.14.1
 - pnpm (installed via mise shim, lockfile version 9.0)
@@ -48,14 +48,22 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 - Tauri v2 (^2.10.3) -- desktop application shell
 - `tauri-build` ^2.5.6 (build dependency)
 - Rust (Edition 2021)
-- None. No persistent storage. All state is in-memory on the frontend.
-- Not applicable
+- **Persistent settings** via `tauri-plugin-store` (JSON file `settings.json`)
+- **Secure API key storage** via `tauri-plugin-stronghold` (encrypted vault with argon2 KDF)
+- **Audio capture** via `cpal` ^0.17 (cross-platform, captures at native rate, resamples to 16kHz mono)
+- **On-device ASR** via `vosk` ^0.3.1 bindings
+- **Remote ASR** via `reqwest` ^0.12 (OpenAI-compatible Whisper API, multipart WAV upload)
+- **Async runtime:** `tokio` ^1 (features: sync, time, rt, macros)
+- **Unique IDs:** `uuid` ^1.0 (v4 feature)
+- **Keyring:** `keyring` ^3 (deprecated, replaced by Stronghold)
 ## Dev Tools
 - pnpm (lockfile version 9.0, lockfile present)
 - No `.npmrc` file
-- Not detected (no ESLint, Biome, or other linter config)
-- Not detected (no Prettier config)
-- Not detected (no test framework, no test files, no test scripts in `package.json`)
+- **Biome** for TS/JS/JSON linting + formatting (`biome.json`)
+- **Prettier** for Svelte formatting (`.prettierrc`, `.prettierignore`)
+- **Lefthook** for git hooks (`lefthook.yml`): pre-commit (typecheck, biome, prettier, rustfmt), pre-push (vitest, cargo test, typecheck, audit)
+- **Vitest** for frontend tests (`src/lib/__tests__/`, `vitest.config.ts`)
+- **Cargo test** for Rust unit tests (module-level `#[cfg(test)]` blocks)
 - TypeScript ~6.0.2 with strict settings:
 ## Key Dependencies
 | Package | Version | Purpose |
@@ -67,10 +75,19 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 | `vite` | ^8.0.4 | Build tool and dev server |
 | `typescript` | ~6.0.2 | Type checking |
 | `@tauri-apps/cli` | ^2.10.1 | Tauri CLI for dev/build commands |
+| `@tauri-apps/api` | ^2.10.1 | Tauri JS API (invoke, listen) |
+| `@tauri-apps/plugin-stronghold` | ^2.0.0 | Stronghold JS API for frontend key management |
 | `@types/node` | ^24.12.2 | Node.js type definitions |
 | `tauri` (Rust) | 2.10.3 | Tauri core framework (Rust side) |
 | `tauri-plugin-log` (Rust) | 2 | Structured logging in debug builds |
-| `serde` / `serde_json` (Rust) | 1.0 | Serialization (available but not actively used yet) |
+| `tauri-plugin-store` (Rust) | 2 | Persistent JSON key-value store for settings |
+| `tauri-plugin-stronghold` (Rust) | 2 | Encrypted vault for API keys (argon2 KDF) |
+| `serde` / `serde_json` (Rust) | 1.0 | Serialization for settings, events, API payloads |
+| `cpal` (Rust) | 0.17 | Cross-platform audio capture |
+| `tokio` (Rust) | 1 | Async runtime, mpsc channels, timed futures |
+| `reqwest` (Rust) | 0.12 | HTTP client for remote ASR (rustls-tls, multipart) |
+| `vosk` (Rust) | 0.3.1 | On-device speech recognition bindings |
+| `uuid` (Rust) | 1.0 | Unique IDs for subtitle events |
 ## Configuration
 - Target: ES2023
 - Module: ESNext with bundler resolution
@@ -81,18 +98,21 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 - HMR support for Tauri dev host
 - Preprocessor: `vitePreprocess()` only
 - Product: "Real-time Subtitles" v0.1.0
-- Identifier: `com.tauri.dev`
+- Identifier: `com.subtitle.realtime`
 - Window: 800x600, resizable
 - CSP: `default-src 'self'; connect-src https://api.deepinfra.com; style-src 'self' 'unsafe-inline'`
 - Bundle targets: all (macOS, Windows, Linux)
 ## Platform Requirements
 - Node.js (v24.x detected)
 - pnpm package manager
-- Rust toolchain (Edition 2021, min 1.77.2)
+- Rust toolchain (Edition 2021, min 1.85)
 - Tauri v2 system dependencies (webkit2gtk on Linux, WebKit on macOS, WebView2 on Windows)
 - Tauri bundles native installers for all platforms
 - No server component -- fully desktop application
 - Requires internet connection for:
+  - Remote ASR engine (OpenAI-compatible API)
+  - Browser engine (Web Speech API)
+  - Remote translation engine
 <!-- GSD:stack-end -->
 
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
@@ -111,11 +131,14 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 - **Reactive state:** Use `$state()` for mutable state, `$derived()` for computed values, `$effect()` for side effects
 - **No `export let`** -- props are declared via `$props()` destructuring, never `export let`
 ### Rust
-- **Edition:** Rust 2021, minimum version 1.77.2
+- **Edition:** Rust 2021, minimum version 1.85
 - **Naming:** Standard snake_case for functions and variables (e.g., `app_lib::run()`)
-- **Error handling:** Uses `expect()` for startup failures in `src-tauri/src/lib.rs`; no custom error types defined yet
+- **Error handling:** `Result<T, String>` for all tauri commands; `.map_err(|e| e.to_string())` pattern
 - **Module structure:** `main.rs` calls `app_lib::run()` from `lib.rs`; crate name is `app_lib`
+- **Async:** `tokio::spawn` for long-running tasks; `mpsc` channels for audio data flow
+- **State management:** Tauri `State<>` wrapper for shared state (AudioState, VoskAsr)
 - **Logging:** Uses `log` crate with `tauri_plugin_log`, configured at `Info` level in debug builds only
+- **Event emission:** `app.emit("event-name", payload)` for Rust→Frontend streaming
 ### CSS/Tailwind
 - **Tailwind CSS v4** via `@tailwindcss/vite` plugin -- no `tailwind.config.*` file needed
 - **Global styles** in `src/app.css` with `@import "tailwindcss";` plus custom resets and keyframe animations
@@ -127,6 +150,8 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 ### Props Interface
 - `onStart`, `onStop`, `onRetry`, `onClose`
 - `onSettings`, `onLanguageChange`, `onTargetLangChange`, `onSubtitlePositionChange`
+- `onEngineChange`, `onTranslationEngineChange`, `onRemoteEndpointChange`, `onApiKeyChange`
+- `onOverlayTransparencyChange`, `onFontSizeChange`
 - `onchange` (lowercase) for the Dropdown's native-style change handler
 ### Event Handling
 - Parent-to-child communication via callback props (no Svelte `createEventDispatcher`)
@@ -147,13 +172,16 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 - Methods are arrow functions assigned to class fields (preserving `this` context): `start = () => { ... }`
 - Private fields use standard `private` keyword: `private recognition`, `private stopping`
 ### Application State Location
-- **Global app state:** `src/app.svelte` manages top-level state (`targetLang`, `translations`, `settingsOpen`, `subtitlePosition`)
-- **Speech state:** Encapsulated in `src/lib/speech.svelte.ts` (`status`, `subtitles`, `language`, `errorMessage`)
+- **Global app state:** `src/app.svelte` manages top-level state (`targetLang`, `translations`, `settingsOpen`, `subtitlePosition`, `selectedEngine`, `remoteEndpoint`, `apiKey`, `overlayTransparency`, `fontSize`, `translationEngine`)
+- **Speech state:** Encapsulated in `src/lib/speech.svelte.ts` (`status`, `subtitles`, `language`, `errorMessage`, `engine`, `remoteEndpoint`, `apiKey`)
+- **Settings persistence:** Rust side via `tauri-plugin-store` (JSON), loaded on mount in `app.svelte`
+- **API key storage:** `src/lib/stronghold.ts` wraps `@tauri-apps/plugin-stronghold` for encrypted storage
 - **No shared store pattern** -- no Svelte stores (`writable`, `readable`, `derived`) are used; everything uses runes
 ### Data Flow
 - Top-down via props from `src/app.svelte` to child components
 - Child-to-parent via callback props (onXxx functions)
 - Translation state (`translations` Record) managed in `src/app.svelte` and passed down
+- Rust→Frontend streaming via Tauri events (`backend://subtitle/*`, `subtitle`, `asr-error`)
 ## Import/Export Patterns
 ### Import Order
 ### Path Aliases
@@ -163,12 +191,13 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 - **Constants:** `export const` for shared data (`src/lib/languages.ts`)
 - **Singletons:** `export const speech = new Speech()` for service instances
 - **Functions:** `export function` for utility functions (`getLangName` in `src/lib/languages.ts`)
+- **Stronghold helpers:** `export async function` for key management (`src/lib/stronghold.ts`)
 - **Components:** Default export via Svelte's implicit behavior (no explicit `export default` needed in `.svelte` files)
 ### File Naming Convention for Library Files
 ## Naming Conventions
 ### Files
 - **Components:** PascalCase `.svelte` -- `IdleScreen.svelte`, `ListeningScreen.svelte`, `ErrorScreen.svelte`, `Settings.svelte`, `SubtitleLine.svelte`, `Dropdown.svelte`
-- **Library modules:** camelCase `.ts` or `.svelte.ts` -- `languages.ts`, `types.ts`, `speech.svelte.ts`
+- **Library modules:** camelCase `.ts` or `.svelte.ts` -- `languages.ts`, `types.ts`, `speech.svelte.ts`, `stronghold.ts`
 - **Entry point:** `main.ts`
 - **App component:** `app.svelte` (lowercase)
 - **Styles:** `app.css` (lowercase)
@@ -176,7 +205,7 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 - `src/components/` -- PascalCase files, plural directory name
 - `src/lib/` -- lowercase files, shared library code
 ### Variables and Functions
-- **camelCase** for all variables and functions: `targetLang`, `translations`, `settingsOpen`, `translateLine()`, `getLangName()`
+- **camelCase** for all variables and functions: `targetLang`, `translations`, `settingsOpen`, `translateLine()`, `getLangName`
 - **SCREAMING_SNAKE_CASE** for constants: `MAX_SUBTITLES`, `SOURCE_LANGUAGES`, `TARGET_LANGUAGES`, `LANG_NAMES`
 - **PascalCase** for types and interfaces: `AppStatus`, `SubtitleLine`, `Props`, `Speech`
 ### CSS Classes
@@ -185,77 +214,126 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 - BEM-like descriptive naming but not strict BEM
 ## Git Conventions
 ### Branch Strategy
-- Single branch: `main` -- all commits are on main, no feature branches observed
+- `main` branch for stable releases
+- Feature branches: `feat/<descriptive-name>` (e.g., `feat/remoteASR`)
 ### Commit Message Format
 - `feat:` -- New features (most common)
 - `fix:` -- Bug fixes
 - `refactor:` -- Code restructuring
-### No Linting or Formatting Enforcement
-- No ESLint configuration found
-- No Prettier configuration found
-- No Biome configuration found
-- No pre-commit hooks configured (no `.husky/`, no `lint-staged`)
-- Code style is maintained manually
+- Scope references milestone/plan: `feat(05-remote-asr):`
+### Linting and Formatting
+- **Biome** for TS/JS/JSON files (lint + format, configured in `biome.json`)
+- **Prettier** for Svelte files (`.prettierrc`)
+- **rustfmt** for Rust files (edition 2021)
+- **Lefthook** git hooks: pre-commit runs typecheck + biome + prettier + rustfmt; pre-push runs tests + typecheck + audit
+- Install hooks: `pnpm lefthook install`
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
 ## Architecture
 
 ## High-Level Architecture
-- Thin-server architecture: Rust backend is a passive window host, not a logic layer
-- Frontend is the entire application: state, API calls, speech recognition all happen client-side
-- No database, no local filesystem access, no IPC beyond Tauri's built-in windowing
+- **Hybrid architecture:** Rust backend handles audio capture, ASR inference, and event streaming; Svelte frontend handles UI, state, settings, and translation orchestration
+- Frontend→Rust via `invoke()` (commands); Rust→Frontend via Tauri `emit()` (events)
+- Persistent settings via `tauri-plugin-store`; secure secrets via `tauri-plugin-stronghold`
 - Single-window desktop app (800x600, resizable)
 ## Frontend Architecture
 ### Component Hierarchy
 ```
+app.svelte
+├── IdleScreen (status === 'idle')
+│   ├── Start button → speech.start()
+│   └── Settings button → settingsOpen = true
+├── ListeningScreen (status === 'listening')
+│   ├── Status bar (listening indicator, lang badge, stop button)
+│   └── SubtitleLine[] (scrolling subtitles with translations)
+├── ErrorScreen (status === 'error')
+│   ├── Error message display
+│   └── Retry button → speech.start()
+└── Settings (slide-up panel)
+    ├── Source Language dropdown
+    ├── Target Language dropdown
+    ├── Subtitle Position slider
+    ├── Translation Engine dropdown
+    ├── Overlay Appearance (transparency, font size)
+    └── Advanced: ASR Engine, Remote Endpoint, API Key
 ```
 ### Data Flow
 - `'idle'` -- Initial/waiting state. Shows IdleScreen with Start button.
 - `'listening'` -- Active speech recognition. Shows ListeningScreen with live subtitles.
 - `'error'` -- Error occurred. Shows ErrorScreen with retry option.
 - `idle -> listening`: User clicks Start, calls `speech.start()`
-- `listening -> idle`: User clicks Stop, calls `speech.stop()`
+  - **Browser engine:** Starts Rust audio capture + Web Speech API
+  - **Vosk engine:** Starts Rust audio capture → loads Vosk model → starts recognition loop
+  - **Remote engine:** Starts Rust audio capture → calls `remote_asr_start` with endpoint + API key
+- `listening -> idle`: User clicks Stop, calls `speech.stop()` (stops ASR + audio capture)
 - `listening -> error`: Speech recognition error fires
 - `error -> listening`: User clicks Try Again, calls `speech.start()`
 ### State Management
-- `$state()` -- Reactive state declared in the `Speech` class (`status`, `subtitles`, `language`, `errorMessage`) and in `app.svelte` (`targetLang`, `translations`, `settingsOpen`, `subtitlePosition`)
+- `$state()` -- Reactive state in `Speech` class (`status`, `subtitles`, `language`, `errorMessage`, `engine`, `remoteEndpoint`, `apiKey`) and `app.svelte` (`targetLang`, `translations`, `settingsOpen`, `subtitlePosition`, etc.)
 - `$derived()` -- Computed values for language labels (`sourceLabel`, `targetLabel`)
 - `$effect()` -- Side-effect that watches `speech.subtitles` and triggers translation for new finalized lines
+### Settings Persistence
+- Settings stored in `settings.json` via `tauri-plugin-store`
+- Loaded on mount in `app.svelte` via `invoke('settings_get')`
+- Saved reactively via `speech.saveSetting(key, value)` → `invoke('settings_set', { key, value })`
+- API keys stored in Stronghold encrypted vault, loaded separately via `src/lib/stronghold.ts`
 ### Translation Pipeline
 - `translatedIds` Set -- prevents re-translating the same line
 - `inFlight` Set -- prevents duplicate in-progress requests for the same ID
 - Context window: keeps last 3 source lines for translation context
-### Speech Recognition
-- Runs in `continuous` mode with `interimResults` enabled
-- Interim results are shown with IDs prefixed `interim-` and replaced when final results arrive
-- Auto-restarts on unexpected `onend` events (unless explicitly stopped)
+### Speech Recognition Engines
+- **Browser (`browser`):** Web Speech API in webview. Runs in `continuous` mode with `interimResults`. Auto-restarts on unexpected `onend`.
+- **Vosk (`vosk`):** Rust-side recognition loop. Audio → mpsc channel → Vosk recognizer → emit events. Partial/final results via `backend://subtitle/update` and `backend://subtitle/final`.
+- **Remote (`remote`):** Rust-side audio chunking with silence detection. Buffers audio → encodes WAV → POST to OpenAI-compatible `/v1/audio/transcriptions` endpoint. Results emitted as `subtitle` events.
 - Language can be changed mid-session via `setLanguage()` which stops and restarts recognition after 100ms delay
 - Caps subtitle history at 12 lines (`MAX_SUBTITLES`)
 ## Backend Architecture
 ### Rust Module Structure
 - `src-tauri/src/main.rs` -- Entry point. Calls `app_lib::run()`. Includes `windows_subsystem = "windows"` attribute for release builds.
-- `src-tauri/src/lib.rs` -- `run()` function that constructs the Tauri app. Only custom setup: logging plugin in debug mode.
+- `src-tauri/src/lib.rs` -- `run()` function that constructs the Tauri app. Registers plugins (log, store, stronghold), manages shared state (AudioState, VoskAsr, RemoteAsrState), registers all commands.
+- `src-tauri/src/commands.rs` -- All tauri commands: audio capture, settings CRUD, Stronghold vault helpers, Vosk model management, event emission helpers. Defines `Settings` struct.
+- `src-tauri/src/audio.rs` -- Audio capture via `cpal`. Captures at device native rate, downmixes to mono, resamples to 16kHz (linear interpolation), delivers 480-sample (30ms) chunks via `mpsc` channel.
+- `src-tauri/src/vosk.rs` -- Vosk ASR wrapper. Manages model loading, recognition loop (tokio::spawn), stop signal via mpsc channel. Emits `backend://subtitle/update` (partial) and `backend://subtitle/final` events.
+- `src-tauri/src/remote_asr.rs` -- Remote ASR via OpenAI-compatible API. Audio buffering with silence detection (RMS threshold), two-layer VAD (pre-send RMS gate at 0.04 + post-response logprob filter at -0.8), WAV encoding, retry logic (3 attempts with backoff), cancellation via `AtomicBool` stop flag. Handles DeepInfra `/v1/inference/` and standard `/v1/audio/transcriptions` URL patterns. Multipart form field: `audio`. Emits `subtitle` and `asr-error` events.
 ### Tauri Configuration
 - Single window: 800x600, resizable, not fullscreen
+- Identifier: `com.subtitle.realtime`
 - CSP policy restricts connections to `https://api.deepinfra.com` only
 - Frontend served from `../dist` (production) or `http://localhost:5173` (dev)
 - Build commands use `pnpm`
 - Bundle targets: all platforms
-### Tauri Commands
-- `tauri-plugin-log` -- Debug logging (debug builds only)
-- `core:default` -- Standard Tauri permissions (from `src-tauri/capabilities/default.json`)
+### Tauri Commands (registered in `lib.rs`)
+- `audio_capture_start` / `audio_capture_stop` -- Start/stop cpal audio capture
+- `asr_infer` -- Stub ASR inference (placeholder)
+- `translate` -- Stub translation (placeholder)
+- `settings_get` / `settings_set` -- Read/write persistent settings
+- `test_event_emission` -- Debug helper for event streaming
+- `api_key_get` / `api_key_set` -- Deprecated (stronghold JS API used instead)
+- `stronghold_get_vault_path` / `stronghold_get_password` -- Stronghold vault bootstrap
+- `vosk_load_model` / `vosk_get_model_path` / `vosk_start` / `vosk_stop` -- Vosk lifecycle
+- `remote_asr_start` / `remote_asr_stop` / `remote_asr_status` -- Remote ASR lifecycle
 ### Frontend-Backend Communication
-- No `invoke()` calls from frontend to Rust
-- No event channel communication
-- No filesystem access from frontend
-- All external API calls go directly from the webview
+- **invoke() calls** from frontend to Rust for all commands above
+- **Event streaming** Rust→Frontend:
+  - `backend://subtitle/update` -- Partial/interim transcription (Vosk)
+  - `backend://subtitle/final` -- Final transcription result (Vosk)
+  - `backend://subtitle/translated` -- Translation result (future use)
+  - `backend://subtitle/error` -- Error events
+  - `subtitle` -- Remote ASR transcription results
+  - `asr-error` -- Remote ASR errors (with `retryable` flag)
+- **Stronghold** accessed via JS API directly from frontend (no Rust commands for key CRUD)
 ## Key Design Decisions
-### 1. Thin Rust Shell
-### 2. Browser Speech API in a Desktop WebView
-### 3. Direct API Calls from Frontend
-### 4. Singleton Speech Instance
-### 5. Context-Aware Translation
+### 1. Hybrid Rust+Svelte Architecture
+Rust handles audio I/O, ASR inference, and network requests (performance-critical paths). Svelte handles UI, state, and orchestration. Communication via Tauri IPC (invoke + events).
+### 2. Three ASR Engine Backends
+Browser (Web Speech API), Vosk (on-device), Remote (OpenAI-compatible API). Engine selection persisted in settings. Switching restarts recognition pipeline.
+### 3. Event-Driven Streaming
+Rust ASR backends emit events for subtitle results. Frontend subscribes via `listen()`. Decouples audio processing from UI rendering.
+### 4. Stronghold for Secrets
+API keys stored in encrypted Stronghold vault (argon2 KDF). Password auto-generated, stored in tauri-plugin-store. Frontend accesses vault via JS API, not Rust commands.
+### 5. Audio Pipeline
+cpal captures at native rate → downmix → resample to 16kHz mono → deliver via mpsc channel. ASR engines consume from the channel. Single capture instance shared across engines.
 <!-- GSD:architecture-end -->
 
 <!-- GSD:skills-start source:skills/ -->
