@@ -31,3 +31,6 @@ src-tauri/vosk-model/
 
 # gsd
 .planning/
+
+# Claude
+.claude/
