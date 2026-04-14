@@ -92,13 +92,10 @@ class Speech {
       }
     );
 
-    this.unlistenError = await listen<{ code: string; message: string }>(
-      'backend://subtitle/error',
-      (event) => {
-        const payload = event.payload;
-        this.setError(`${payload.code}: ${payload.message}`);
-      }
-    );
+    this.unlistenError = await listen<{ code: string; message: string }>('backend://subtitle/error', (event) => {
+      const payload = event.payload;
+      this.setError(`${payload.code}: ${payload.message}`);
+    });
   };
 
   addInterimSubtitle = (id: string, text: string) => {
@@ -195,28 +192,43 @@ class Speech {
 
   start = async () => {
     if (this.engine === 'remote') {
+      console.log(
+        '[RemoteASR] start called, apiKey length:',
+        this.apiKey?.length ?? 0,
+        'endpoint saved:',
+        this.remoteEndpoint
+      );
       try {
+        console.log('[RemoteASR] starting audio capture...');
         await this.startCapture();
-        await invoke('remote_asr_start');
+        console.log('[RemoteASR] audio capture started, invoking remote_asr_start...');
+        await invoke('remote_asr_start', { apiKey: this.apiKey });
+        console.log('[RemoteASR] remote_asr_start succeeded');
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        console.error('[RemoteASR] start failed:', message);
         this.setError(`Failed to start Remote ASR: ${message}`);
         return;
       }
 
-      this._subtitleUnlisten = await listen<{ text: string; timestamp: number; is_final: boolean }>('subtitle', (event) => {
-        const { text, timestamp, is_final } = event.payload;
-        if (!text || !text.trim()) return;
-        const id = `remote-${timestamp}`;
-        if (is_final) {
-          this.addFinalSubtitle(id, text.trim());
-        } else {
-          this.addInterimSubtitle(id, text.trim());
+      this._subtitleUnlisten = await listen<{ text: string; timestamp: number; is_final: boolean }>(
+        'subtitle',
+        (event) => {
+          const { text, timestamp, is_final } = event.payload;
+          console.log('[RemoteASR] subtitle event:', { text, is_final, timestamp });
+          if (!text || !text.trim()) return;
+          const id = `remote-${timestamp}`;
+          if (is_final) {
+            this.addFinalSubtitle(id, text.trim());
+          } else {
+            this.addInterimSubtitle(id, text.trim());
+          }
         }
-      });
+      );
 
       this._errorUnlisten = await listen<{ message: string; retryable: boolean }>('asr-error', (event) => {
         const { message, retryable } = event.payload;
+        console.error('[RemoteASR] asr-error event:', { message, retryable });
         this.errorMessage = message;
         if (!retryable) {
           this.status = 'error';
@@ -331,7 +343,11 @@ class Speech {
 
     recognition.onend = () => {
       if (!this.stopping && !hasErrored) {
-        try { recognition.start(); } catch { /* restart failed */ }
+        try {
+          recognition.start();
+        } catch {
+          /* restart failed */
+        }
       }
     };
 
@@ -343,9 +359,10 @@ class Speech {
       this.errorMessage = e instanceof Error ? e.message : 'Failed to start recognition';
       this.status = 'error';
     }
-  }
+  };
 
   stop = async () => {
+    console.log('[RemoteASR] stop called, engine:', this.engine);
     if (this._subtitleUnlisten) {
       this._subtitleUnlisten();
       this._subtitleUnlisten = null;
@@ -364,7 +381,7 @@ class Speech {
       this.recognition = null;
     }
     this.status = 'idle';
-  }
+  };
 
   setLanguage = (lang: string) => {
     this.language = lang;
@@ -374,7 +391,7 @@ class Speech {
       this.recognition = null;
       setTimeout(() => this.start(), 100);
     }
-  }
+  };
 
   setEngine = (engine: 'browser' | 'vosk' | 'remote') => {
     this.engine = engine;
@@ -382,7 +399,7 @@ class Speech {
       this.stop();
       setTimeout(() => this.start(), 100);
     }
-  }
+  };
 
   translate = async (text: string, sourceLang: string, targetLang: string): Promise<string> => {
     try {
@@ -397,15 +414,38 @@ class Speech {
       throw err;
     }
   };
+
+  saveSetting = async (key: string, value: string | number) => {
+    const stringValue = typeof value === 'number' ? String(value) : value;
+    await invoke('settings_set', { key, value: stringValue });
+    if (key === 'remote_endpoint') {
+      this.remoteEndpoint = stringValue;
+    }
+  };
+
+  saveApiKey = async (keyName: string, keyValue: string) => {
+    console.log('saveApiKey called:', keyName, 'value length:', keyValue.length);
+    if (!keyValue || !keyValue.trim()) {
+      console.error('saveApiKey: empty or whitespace API key, skipping');
+      return;
+    }
+    try {
+      const { saveApiKey: strongholdSave } = await import('./stronghold');
+      await strongholdSave(keyName, keyValue);
+      console.log('saveApiKey: Stronghold save succeeded');
+    } catch (e) {
+      console.error('saveApiKey: Stronghold save failed', e);
+    }
+  };
 }
 
-function appendSubtitle(
-  subs: SubtitleLine[],
-  removeId: string | null,
-  add: SubtitleLine,
-): SubtitleLine[] {
+function appendSubtitle(subs: SubtitleLine[], removeId: string | null, add: SubtitleLine): SubtitleLine[] {
   const filtered = removeId ? subs.filter((s) => s.id !== removeId) : subs;
   return [...filtered, add].slice(-MAX_SUBTITLES);
 }
 
 export const speech = new Speech();
+
+export function createSpeechForTest() {
+  return new Speech();
+}

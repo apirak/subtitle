@@ -1,147 +1,169 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
-  import { speech } from './lib/speech.svelte';
-  import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from './lib/languages';
-  import IdleScreen from './components/IdleScreen.svelte';
-  import ListeningScreen from './components/ListeningScreen.svelte';
-  import ErrorScreen from './components/ErrorScreen.svelte';
-  import Settings from './components/Settings.svelte';
-  import './app.css';
+	import { onDestroy, onMount } from "svelte";
+	import { invoke } from "@tauri-apps/api/core";
+	import { speech } from "./lib/speech.svelte";
+	import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from "./lib/languages";
+	import { getApiKey } from "./lib/stronghold";
+	import IdleScreen from "./components/IdleScreen.svelte";
+	import ListeningScreen from "./components/ListeningScreen.svelte";
+	import ErrorScreen from "./components/ErrorScreen.svelte";
+	import Settings from "./components/Settings.svelte";
+	import "./app.css";
 
-  onDestroy(() => {
-    speech.destroy();
-  });
+	onDestroy(() => {
+		speech.destroy();
+	});
 
-  let targetLang = $state('th');
-  let translations = $state<Record<string, string>>({});
-  let settingsOpen = $state(false);
-  let subtitlePosition = $state(20);
-  let selectedEngine = $state<'browser' | 'vosk'>('browser');
-  let remoteEndpoint = $state('');
-  let modelPath = $state('');
-  let apiKey = $state('');
-  let overlayTransparency = $state(80);
-  let fontSize = $state(24);
-  let translationEngine = $state('none');
+	let targetLang = $state("th");
+	let translations = $state<Record<string, string>>({});
+	let settingsOpen = $state(false);
+	let subtitlePosition = $state(20);
+	let selectedEngine = $state<"browser" | "vosk" | "remote">("browser");
+	let remoteEndpoint = $state("");
+	let modelPath = $state("");
+	let apiKey = $state("");
+	let overlayTransparency = $state(80);
+	let fontSize = $state(24);
+	let translationEngine = $state("none");
 
-  const translatedIds = new Set<string>();
-  const inFlight = new Set<string>();
-  const recentLines: string[] = [];
+	const translatedIds = new Set<string>();
+	const inFlight = new Set<string>();
+	const recentLines: string[] = [];
 
-  onMount(async () => {
-    try {
-      const settings = await invoke<{
-        engine: string;
-        source_lang: string;
-        target_lang: string;
-        subtitle_position: number;
-        remote_endpoint: string | null;
-        model_path: string | null;
-        overlay_transparency: number | null;
-        font_size: number | null;
-        translation_engine: string | null;
-      }>('settings_get');
-      selectedEngine = settings.engine as 'browser' | 'vosk';
-      speech.engine = settings.engine as 'browser' | 'vosk';
-      speech.language = settings.source_lang;
-      targetLang = settings.target_lang;
-      subtitlePosition = settings.subtitle_position;
-      remoteEndpoint = settings.remote_endpoint ?? '';
-      modelPath = settings.model_path ?? '';
-      overlayTransparency = settings.overlay_transparency ?? 80;
-      fontSize = settings.font_size ?? 24;
-      translationEngine = settings.translation_engine ?? 'none';
-    } catch (err) {
-      console.error('Failed to load settings:', err);
-    }
-  });
+	onMount(async () => {
+		try {
+			const settings = await invoke<{
+				engine: string;
+				source_lang: string;
+				target_lang: string;
+				overlay_transparency: number;
+				overlay_font_size: number;
+				subtitle_position: number;
+				translation_engine: string;
+				remote_endpoint: string | null;
+				remote_api_key_name: string | null;
+			}>("settings_get");
+			selectedEngine = settings.engine as "browser" | "vosk" | "remote";
+			speech.engine = settings.engine as "browser" | "vosk" | "remote";
+			speech.language = settings.source_lang;
+			targetLang = settings.target_lang;
+			subtitlePosition = settings.subtitle_position;
+			remoteEndpoint = settings.remote_endpoint ?? "";
+			overlayTransparency = Math.round(settings.overlay_transparency * 100);
+			fontSize = settings.overlay_font_size;
+			translationEngine = settings.translation_engine;
 
-  let sourceLabel = $derived(
-    SOURCE_LANGUAGES.find((l) => l.code === speech.language)?.label ?? 'Auto'
-  );
-  let targetLabel = $derived(
-    TARGET_LANGUAGES.find((l) => l.value === targetLang)?.label ?? 'English'
-  );
+			const keyName = settings.remote_api_key_name;
+			if (keyName) {
+				try {
+					const result = await getApiKey(keyName);
+					if (result) {
+						apiKey = result;
+						speech.apiKey = result;
+					}
+				} catch (err) {
+					console.error("Failed to load API key from Stronghold:", err);
+				}
+			}
+		} catch (err) {
+			console.error("Failed to load settings:", err);
+		}
+	});
 
-  $effect(() => {
-    const subs = speech.subtitles;
-    for (const line of subs) {
-      if (line.id.startsWith('interim-')) continue;
-      if (translatedIds.has(line.id)) continue;
-      translatedIds.add(line.id);
-      if (targetLang) translateLine(line.id, line.text);
-    }
-  });
+	let sourceLabel = $derived(SOURCE_LANGUAGES.find((l) => l.code === speech.language)?.label ?? "Auto");
+	let targetLabel = $derived(TARGET_LANGUAGES.find((l) => l.value === targetLang)?.label ?? "English");
 
-  async function translateLine(id: string, text: string) {
-    if (!targetLang || inFlight.has(id)) return;
+	$effect(() => {
+		const subs = speech.subtitles;
+		for (const line of subs) {
+			if (line.id.startsWith("interim-")) continue;
+			if (translatedIds.has(line.id)) continue;
+			translatedIds.add(line.id);
+			if (targetLang) translateLine(line.id, line.text);
+		}
+	});
 
-    recentLines.push(text);
-    if (recentLines.length > 3) recentLines.shift();
+	async function translateLine(id: string, text: string) {
+		if (!targetLang || inFlight.has(id)) return;
 
-    inFlight.add(id);
+		recentLines.push(text);
+		if (recentLines.length > 3) recentLines.shift();
 
-    try {
-      const result = await speech.translate(text, speech.language, targetLang);
-      if (result) {
-        translations[id] = result;
-      }
-    } catch {
-      /* silent */
-    } finally {
-      inFlight.delete(id);
-    }
-  }
+		inFlight.add(id);
+
+		try {
+			const result = await speech.translate(text, speech.language, targetLang);
+			if (result) {
+				translations[id] = result;
+			}
+		} catch {
+			/* silent */
+		} finally {
+			inFlight.delete(id);
+		}
+	}
 </script>
 
 <svelte:head>
-  <title>Real-time Subtitles</title>
+	<title>Real-time Subtitles</title>
 </svelte:head>
 
 <div class="w-full h-screen flex flex-col items-center justify-center relative overflow-hidden">
-  {#if speech.status === 'idle'}
-    <IdleScreen {sourceLabel} {targetLabel} onStart={speech.start} onSettings={() => settingsOpen = true} />
-  {:else if speech.status === 'listening'}
-    <ListeningScreen
-      subtitles={speech.subtitles}
-      {translations}
-      {sourceLabel}
-      {targetLabel}
-      {subtitlePosition}
-      onStop={speech.stop}
-    />
-  {:else if speech.status === 'error'}
-    <ErrorScreen message={speech.errorMessage} onRetry={speech.start} />
-  {/if}
+	{#if speech.status === "idle"}
+		<IdleScreen {sourceLabel} {targetLabel} onStart={speech.start} onSettings={() => (settingsOpen = true)} />
+	{:else if speech.status === "listening"}
+		<ListeningScreen
+			subtitles={speech.subtitles}
+			{translations}
+			{sourceLabel}
+			{targetLabel}
+			{subtitlePosition}
+			onStop={speech.stop}
+		/>
+	{:else if speech.status === "error"}
+		<ErrorScreen message={speech.errorMessage} onRetry={speech.start} />
+	{/if}
 
-  <Settings
-    open={settingsOpen}
-    language={speech.language}
-    onLanguageChange={speech.setLanguage}
-    {targetLang}
-    onTargetLangChange={(v) => targetLang = v}
-    {subtitlePosition}
-    onSubtitlePositionChange={(v) => subtitlePosition = v}
-    onClose={() => settingsOpen = false}
-    {overlayTransparency}
-    onOverlayTransparencyChange={(v) => {
-      overlayTransparency = v;
-      speech.saveSetting?.('overlay_transparency', v).catch(console.error);
-    }}
-    {fontSize}
-    onFontSizeChange={(v) => {
-      fontSize = v;
-      speech.saveSetting?.('font_size', v).catch(console.error);
-    }}
-    {translationEngine}
-    onTranslationEngineChange={(v) => {
-      translationEngine = v;
-      speech.saveSetting?.('translation_engine', v).catch(console.error);
-    }}
-    engine={speech.engine}
-    onEngineChange={(v) => speech.setEngine(v as 'browser' | 'vosk' | 'remote')}
-  />
+	<Settings
+		open={settingsOpen}
+		language={speech.language}
+		onLanguageChange={speech.setLanguage}
+		{targetLang}
+		onTargetLangChange={(v) => (targetLang = v)}
+		{subtitlePosition}
+		onSubtitlePositionChange={(v) => (subtitlePosition = v)}
+		onClose={() => (settingsOpen = false)}
+		{overlayTransparency}
+		onOverlayTransparencyChange={(v) => {
+			overlayTransparency = v;
+			speech.saveSetting?.("overlay_transparency", v).catch(console.error);
+		}}
+		{fontSize}
+		onFontSizeChange={(v) => {
+			fontSize = v;
+			speech.saveSetting?.("font_size", v).catch(console.error);
+		}}
+		{translationEngine}
+		onTranslationEngineChange={(v) => {
+			translationEngine = v;
+			speech.saveSetting?.("translation_engine", v).catch(console.error);
+		}}
+		engine={speech.engine}
+		onEngineChange={(v) => {
+			speech.setEngine(v as "browser" | "vosk" | "remote");
+			speech.saveSetting("engine", v).catch(console.error);
+		}}
+		{remoteEndpoint}
+		onRemoteEndpointChange={(v) => {
+			remoteEndpoint = v;
+			speech.saveSetting("remote_endpoint", v).catch(console.error);
+		}}
+		{apiKey}
+		onApiKeyChange={(v) => {
+			apiKey = v;
+			speech.apiKey = v;
+			speech.saveApiKey("remote", v).catch(console.error);
+			speech.saveSetting("remote_api_key_name", "remote").catch(console.error);
+		}}
+	/>
 </div>
-
-

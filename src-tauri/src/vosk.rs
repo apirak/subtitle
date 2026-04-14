@@ -1,5 +1,5 @@
-use crate::commands::{emit_error, emit_subtitle_final, emit_subtitle_update};
 use crate::audio::AudioState;
+use crate::commands::{emit_error, emit_subtitle_final, emit_subtitle_update};
 use log::{error, info};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
@@ -33,18 +33,14 @@ impl VoskAsr {
         if !path.exists() {
             return Err(format!("Model path does not exist: {}", model_path));
         }
-        let model =
-            Model::new(model_path).ok_or_else(|| format!("Failed to load model from {}", model_path))?;
+        let model = Model::new(model_path)
+            .ok_or_else(|| format!("Failed to load model from {}", model_path))?;
         *self.model.lock().map_err(|e| e.to_string())? = Some(Arc::new(model));
         info!("Vosk model loaded from {}", model_path);
         Ok(())
     }
 
-    pub fn start(
-        &self,
-        app: AppHandle,
-        audio_state: State<'_, AudioState>,
-    ) -> Result<(), String> {
+    pub fn start(&self, app: AppHandle, audio_state: State<'_, AudioState>) -> Result<(), String> {
         let model = self.model.lock().map_err(|e| e.to_string())?.clone();
         let model = model.ok_or("Model not loaded")?;
 

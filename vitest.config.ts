@@ -1,9 +1,7 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
-import { defineConfig } from 'vite';
-
-const host = process.env.TAURI_DEV_HOST;
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [tailwindcss(), svelte()],
@@ -12,12 +10,10 @@ export default defineConfig({
       $lib: path.resolve('./src/lib'),
     },
   },
-  clearScreen: false,
-  server: {
-    port: 5173,
-    strictPort: false,
-    host: host || false,
-    hmr: host ? { protocol: 'ws', host, port: 5174 } : undefined,
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/lib/__tests__/setup.ts'],
+    include: ['src/**/*.{test,spec}.{js,ts}'],
+    globals: true,
   },
-  envPrefix: ['VITE_', 'TAURI_'],
 });
