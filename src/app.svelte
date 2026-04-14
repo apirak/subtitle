@@ -17,9 +17,9 @@
   let targetLang = $state('th');
   let translations = $state<Record<string, string>>({});
   let settingsOpen = $state(false);
-  let subtitlePosition = $state(20);
   let overlayTransparency = $state(80);
   let fontSize = $state(24);
+  let subtitlePosition = $state('bottom');
   let translationEngine = $state('none');
   let isMockMode = $state(false);
   let altPressed = $state(false);
@@ -51,21 +51,19 @@
           engine?: string;
           source_lang?: string;
           target_lang?: string;
-          subtitle_position?: number | null;
           remote_endpoint: string | null;
           model_path: string | null;
           overlay_transparency: number | null;
           font_size: number | null;
+          subtitle_position: string | null;
           translation_engine: string | null;
         }>('settings_get');
         speech.engine = (settings.engine ?? 'browser') as 'browser' | 'vosk';
         speech.language = settings.source_lang ?? 'en-US';
         targetLang = settings.target_lang ?? 'th';
-        subtitlePosition = Number.isFinite(settings.subtitle_position)
-          ? Number(settings.subtitle_position)
-          : 20;
         overlayTransparency = settings.overlay_transparency ?? 80;
         fontSize = settings.font_size ?? 24;
+        subtitlePosition = settings.subtitle_position ?? 'bottom';
         translationEngine = settings.translation_engine ?? 'none';
       } catch (err) {
         console.error('Failed to load settings:', err);
@@ -168,7 +166,6 @@
       {translations}
       {sourceLabel}
       {targetLabel}
-      {subtitlePosition}
       onStop={isMockMode ? exitMockMode : speech.stop}
     />
   {:else if speech.status === 'error'}
@@ -181,8 +178,6 @@
     onLanguageChange={speech.setLanguage}
     {targetLang}
     onTargetLangChange={(v) => targetLang = v}
-    {subtitlePosition}
-    onSubtitlePositionChange={(v) => subtitlePosition = v}
     onClose={() => settingsOpen = false}
     {overlayTransparency}
     onOverlayTransparencyChange={(v) => {
@@ -193,6 +188,11 @@
     onFontSizeChange={(v) => {
       fontSize = v;
       invoke('settings_set', { settings: { font_size: v } }).catch(console.error);
+    }}
+    {subtitlePosition}
+    onSubtitlePositionChange={(v) => {
+      subtitlePosition = v;
+      invoke('settings_set', { settings: { subtitle_position: v } }).catch(console.error);
     }}
     {translationEngine}
     onTranslationEngineChange={(v) => {

@@ -7,12 +7,11 @@
     translations: Record<string, string>;
     sourceLabel: string;
     targetLabel: string;
-    subtitlePosition: number;
     onStop: () => void;
     isMockMode?: boolean;
   }
 
-  let { subtitles, translations, sourceLabel, targetLabel, subtitlePosition, onStop, isMockMode = false }: Props = $props();
+  let { subtitles, translations, sourceLabel, targetLabel, onStop, isMockMode = false }: Props = $props();
 </script>
 
 <svelte:head>
@@ -28,15 +27,19 @@
   <button class="stop" onclick={onStop}>Stop</button>
 </div>
 
-<div class="fixed left-0 right-0 flex flex-col overflow-y-auto gap-2 px-4" style="bottom: {subtitlePosition}%">
-  {#each subtitles as line, i}
-    <SubtitleLine
-      text={line.text}
-      translation={translations[line.id]}
-      isTranslating={!line.id.startsWith('interim-') && !translations[line.id]}
-      isLast={i === subtitles.length - 1}
-    />
-  {/each}
+<div class="fixed top-18 bottom-0 left-0 right-0 overflow-y-auto px-4 flex flex-col justify-end">
+  <div class="flex flex-col gap-2">
+    {#each subtitles as line, i}
+      <SubtitleLine
+        text={line.text}
+        translation={translations[line.id]}
+        isTranslating={!line.id.startsWith('interim-') && !translations[line.id]}
+        isLast={i === subtitles.length - 1}
+      />
+    {/each}
+
+    <div class="h-32 shrink-0" aria-hidden="true"></div>
+  </div>
 </div>
 
 <style>

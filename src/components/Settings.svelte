@@ -8,8 +8,6 @@
     onLanguageChange: (lang: string) => void;
     targetLang: string;
     onTargetLangChange: (lang: string) => void;
-    subtitlePosition: number;
-    onSubtitlePositionChange: (pos: number) => void;
     onClose: () => void;
     translationEngine: string;
     onTranslationEngineChange: (engine: string) => void;
@@ -17,6 +15,8 @@
     onOverlayTransparencyChange: (value: number) => void;
     fontSize: number;
     onFontSizeChange: (value: number) => void;
+    subtitlePosition: string;
+    onSubtitlePositionChange: (value: string) => void;
     engine: string;
     onEngineChange: (engine: string) => void;
   }
@@ -27,8 +27,6 @@
     onLanguageChange,
     targetLang,
     onTargetLangChange,
-    subtitlePosition,
-    onSubtitlePositionChange,
     onClose,
     translationEngine,
     onTranslationEngineChange,
@@ -36,6 +34,8 @@
     onOverlayTransparencyChange,
     fontSize,
     onFontSizeChange,
+    subtitlePosition,
+    onSubtitlePositionChange,
     engine,
     onEngineChange,
   }: Props = $props();
@@ -52,6 +52,10 @@
     { value: 'ollama', label: 'Ollama (Local)' },
     { value: 'nllb', label: 'NLLB (On-Device)' },
     { value: 'remote', label: 'Remote (API)' },
+  ];
+  const subtitlePositionOptions = [
+    { value: 'top', label: 'Top' },
+    { value: 'bottom', label: 'Bottom' },
   ];
 </script>
 
@@ -97,23 +101,6 @@
         <Dropdown id="target-lang" value={targetLang} options={targetOptions} onchange={onTargetLangChange} />
       </div>
 
-      <div class="flex flex-col gap-1.5">
-        <label class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" for="subtitle-pos">Subtitle Position — {subtitlePosition}%</label>
-        <input
-          id="subtitle-pos"
-          type="range"
-          min={5}
-          max={90}
-          value={subtitlePosition}
-          oninput={(e) => onSubtitlePositionChange(Number((e.target as HTMLInputElement).value))}
-          class="slider"
-        />
-        <div class="flex justify-between text-[0.65rem] text-white/20">
-          <span>Bottom</span>
-          <span>Top</span>
-        </div>
-      </div>
-
       <!-- TRANSLATION SECTION -->
       <div class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]">Translation</div>
 
@@ -157,6 +144,11 @@
           <span>12px</span>
           <span>48px</span>
         </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" for="subtitle-position">Subtitle Position</label>
+        <Dropdown id="subtitle-position" value={subtitlePosition} options={subtitlePositionOptions} onchange={onSubtitlePositionChange} />
       </div>
 
       <!-- ADVANCED SECTION -->
