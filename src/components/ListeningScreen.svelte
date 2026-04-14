@@ -7,35 +7,39 @@
     translations: Record<string, string>;
     sourceLabel: string;
     targetLabel: string;
-    subtitlePosition: number;
     onStop: () => void;
+    isMockMode?: boolean;
   }
 
-  let { subtitles, translations, sourceLabel, targetLabel, subtitlePosition, onStop }: Props = $props();
+  let { subtitles, translations, sourceLabel, targetLabel, onStop, isMockMode = false }: Props = $props();
 </script>
 
 <svelte:head>
   <title>Listening… · Real-time Subtitles</title>
 </svelte:head>
 
-<div class="status-bar">
+<div class="status-bar bg-black/5 backdrop-blur-md">
   <div class="status-indicator">
     <span class="status-dot"></span>
-    Listening…
+    {isMockMode ? 'Mock Preview' : 'Listening…'}
     <span class="lang-badge">{sourceLabel} → {targetLabel}</span>
   </div>
   <button class="stop" onclick={onStop}>Stop</button>
 </div>
 
-<div class="subtitle-container" style="bottom: {subtitlePosition}%">
-  {#each subtitles as line, i}
-    <SubtitleLine
-      text={line.text}
-      translation={translations[line.id]}
-      isTranslating={!line.id.startsWith('interim-') && !translations[line.id]}
-      isLast={i === subtitles.length - 1}
-    />
-  {/each}
+<div class="fixed top-18 bottom-0 left-0 right-0 overflow-y-auto flex flex-col justify-end">
+  <div class="flex flex-col gap-2">
+    {#each subtitles as line, i}
+      <SubtitleLine
+        text={line.text}
+        translation={translations[line.id]}
+        isTranslating={!line.id.startsWith('interim-') && !translations[line.id]}
+        isLast={i === subtitles.length - 1}
+      />
+    {/each}
+
+    <div class="h-32 shrink-0" aria-hidden="true"></div>
+  </div>
 </div>
 
 <style>
@@ -97,18 +101,5 @@
     color: #fff;
     background: rgba(239, 68, 68, 0.15);
     border-color: rgba(239, 68, 68, 0.35);
-  }
-
-  .subtitle-container {
-    position: fixed;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 0 24px;
-    pointer-events: auto;
   }
 </style>

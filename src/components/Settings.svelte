@@ -8,8 +8,6 @@
 		onLanguageChange: (lang: string) => void;
 		targetLang: string;
 		onTargetLangChange: (lang: string) => void;
-		subtitlePosition: number;
-		onSubtitlePositionChange: (pos: number) => void;
 		onClose: () => void;
 		translationEngine: string;
 		onTranslationEngineChange: (engine: string) => void;
@@ -31,8 +29,6 @@
 		onLanguageChange,
 		targetLang,
 		onTargetLangChange,
-		subtitlePosition,
-		onSubtitlePositionChange,
 		onClose,
 		translationEngine,
 		onTranslationEngineChange,
@@ -116,25 +112,6 @@
 					>Translate To</label
 				>
 				<Dropdown id="target-lang" value={targetLang} options={targetOptions} onchange={onTargetLangChange} />
-			</div>
-
-			<div class="flex flex-col gap-1.5">
-				<label class="text-xs font-semibold text-white/40 uppercase tracking-[0.06em]" for="subtitle-pos"
-					>Subtitle Position — {subtitlePosition}%</label
-				>
-				<input
-					id="subtitle-pos"
-					type="range"
-					min={5}
-					max={90}
-					value={subtitlePosition}
-					oninput={(e) => onSubtitlePositionChange(Number((e.target as HTMLInputElement).value))}
-					class="slider"
-				/>
-				<div class="flex justify-between text-[0.65rem] text-white/20">
-					<span>Bottom</span>
-					<span>Top</span>
-				</div>
 			</div>
 
 			<!-- TRANSLATION SECTION -->
