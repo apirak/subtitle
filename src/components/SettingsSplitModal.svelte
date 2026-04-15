@@ -1,5 +1,11 @@
 <script lang="ts">
 	import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from "../lib/languages";
+	import {
+		translateWithOpenAI,
+		validateTranslationConfig,
+		type TranslationConfig,
+	} from "../lib/openai-translator";
+	import { resolveOpenAICompatibleEndpoint } from "../lib/api-connection";
 	import SettingsSidebar from "./setting/SettingsSidebar.svelte";
 	import SettingsPanelHeader from "./setting/SettingsPanelHeader.svelte";
 
@@ -75,6 +81,11 @@
 	let currentTranslationEndpoint = $state("");
 	let currentTranslationModel = $state("");
 	let currentTranslationApiKey = $state("");
+	let isTestingTranslate = $state(false);
+	let testTranslateError = $state("");
+	let testTranslateResult = $state("");
+	let testTranslateSourceText = $state("");
+	let testTranslateResolvedUrl = $state("");
 
 	const menuItems: Array<{ key: SettingsSection; label: string }> = [
 		{ key: "theme", label: "Theme" },
@@ -101,8 +112,6 @@
 	const translationEngineOptions = [
 		{ value: "none", label: "None" },
 		{ value: "remote", label: "Remote (OpenAI-compatible)" },
-		{ value: "ollama", label: "Ollama" },
-		{ value: "nllb", label: "NLLB (Backend stub)" },
 	];
 
 	$effect(() => {
@@ -211,6 +220,58 @@
 	function handleTranslationApiKeyChange(nextValue: string) {
 		currentTranslationApiKey = nextValue;
 		onTranslationApiKeyChange(nextValue);
+	}
+
+	function getTranslationTestSample(languageCode: string): string {
+		if (languageCode.startsWith("th")) {
+			return "สวัสดี นี่คือการทดสอบการแปล";
+		}
+
+		if (languageCode.startsWith("ja")) {
+			return "こんにちは、これは翻訳テストです";
+		}
+
+		if (languageCode.startsWith("zh")) {
+			return "你好，这是翻译测试";
+		}
+
+		return "Hello, this is a translation test.";
+	}
+
+	async function handleTestTranslate() {
+		testTranslateError = "";
+		testTranslateResult = "";
+		testTranslateSourceText = "";
+		testTranslateResolvedUrl = resolveOpenAICompatibleEndpoint(currentTranslationEndpoint);
+
+		const config: TranslationConfig = {
+			engine: currentTranslationEngine === "none" ? "none" : "remote",
+			model: currentTranslationModel,
+			endpoint: currentTranslationEndpoint,
+			apiKey: currentTranslationApiKey,
+		};
+
+		const validation = validateTranslationConfig(config);
+		if (!validation.valid) {
+			testTranslateError = validation.error ?? "Translation configuration is invalid";
+			return;
+		}
+
+		const sourceLanguage = currentLanguage || "en-US";
+		const targetLanguage = currentTargetLang || "th";
+		const sampleText = getTranslationTestSample(sourceLanguage);
+
+		testTranslateSourceText = sampleText;
+		isTestingTranslate = true;
+
+		try {
+			const translatedText = await translateWithOpenAI(sampleText, sourceLanguage, targetLanguage, config);
+			testTranslateResult = translatedText;
+		} catch (error) {
+			testTranslateError = error instanceof Error ? error.message : String(error);
+		} finally {
+			isTestingTranslate = false;
+		}
 	}
 </script>
 
@@ -407,10 +468,6 @@
 													Disable translated columns and show only source text.
 												{:else if option.value === "remote"}
 													Use an OpenAI-compatible chat completion endpoint.
-												{:else if option.value === "ollama"}
-													Use a local Ollama chat model over HTTP.
-												{:else}
-													Use the backend translation stub or future local engine.
 												{/if}
 											</div>
 										</div>
@@ -426,7 +483,7 @@
 									id="split-translation-model"
 									type="text"
 									class="settings-input"
-									placeholder={currentTranslationEngine === "ollama" ? "qwen2.5:3b" : "gpt-4o-mini"}
+									placeholder="Qwen3-32B"
 									value={currentTranslationModel}
 									oninput={(event) => handleTranslationModelChange((event.target as HTMLInputElement).value)}
 								/>
@@ -438,27 +495,57 @@
 									id="split-translation-endpoint"
 									type="url"
 									class="settings-input"
-									placeholder={currentTranslationEngine === "ollama"
-										? "http://localhost:11434/v1/chat/completions"
-										: "https://api.example.com/v1/chat/completions"}
+									placeholder="https://api.deepinfra.com/v1/openai"
 									value={currentTranslationEndpoint}
 									oninput={(event) => handleTranslationEndpointChange((event.target as HTMLInputElement).value)}
 								/>
+								<p class="settings-endpoint-hint">e.g. DashScope: <code>…/compatible-mode/v1</code> · DeepInfra: <code>…/v1/openai</code> · Gemini: <code>…/v1beta/openai</code></p>
 							</div>
 
-							{#if currentTranslationEngine === "remote"}
-								<div>
-									<label class="settings-field-label" for="split-translation-api-key">API Key</label>
-									<input
-										id="split-translation-api-key"
-										type="password"
-										class="settings-input"
-										placeholder="sk-..."
-										value={currentTranslationApiKey}
-										onchange={(event) => handleTranslationApiKeyChange((event.target as HTMLInputElement).value)}
-									/>
-								</div>
-							{/if}
+							<div class="mb-5">
+								<label class="settings-field-label" for="split-translation-api-key">API Key</label>
+								<input
+									id="split-translation-api-key"
+									type="password"
+									class="settings-input"
+									placeholder="sk-..."
+									value={currentTranslationApiKey}
+									onchange={(event) => handleTranslationApiKeyChange((event.target as HTMLInputElement).value)}
+								/>
+							</div>
+
+							<div class="mt-5">
+								<button
+									type="button"
+									class="settings-test-button"
+									onclick={handleTestTranslate}
+									disabled={isTestingTranslate}
+								>
+									{#if isTestingTranslate}Testing…{:else}Test Translate{/if}
+								</button>
+
+								{#if testTranslateResolvedUrl}
+									<div class="settings-test-meta">Resolved endpoint: {testTranslateResolvedUrl}</div>
+								{/if}
+
+								{#if testTranslateSourceText}
+									<div class="settings-test-block">
+										<div class="settings-test-label">Source sample</div>
+										<div class="settings-test-value">{testTranslateSourceText}</div>
+									</div>
+								{/if}
+
+								{#if testTranslateResult}
+									<div class="settings-test-block">
+										<div class="settings-test-label">Translated result</div>
+										<div class="settings-test-value">{testTranslateResult}</div>
+									</div>
+								{/if}
+
+								{#if testTranslateError}
+									<div class="settings-test-error">{testTranslateError}</div>
+								{/if}
+							</div>
 						{/if}
 
 						<p class="settings-helper-text">
@@ -567,6 +654,90 @@
 	}
 
 	.theme-card-description,
+
+	.settings-test-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.7rem 1rem;
+		border-radius: 0.75rem;
+		border: 1px solid var(--border-color-strong);
+		background: var(--surface-hover-color);
+		color: var(--on-surface-color-strong);
+		font-weight: 600;
+		cursor: pointer;
+		transition:
+			background-color 160ms ease,
+			border-color 160ms ease,
+			opacity 160ms ease;
+	}
+
+	.settings-test-button:hover:not(:disabled) {
+		background: var(--field-color);
+		border-color: var(--on-surface-color);
+	}
+
+	.settings-test-button:disabled {
+		opacity: 0.7;
+		cursor: progress;
+	}
+
+	.settings-test-meta,
+	.settings-test-error,
+	.settings-test-value {
+		margin-top: 0.75rem;
+		word-break: break-word;
+	}
+
+	.settings-test-meta {
+		font-size: 0.74rem;
+		color: var(--muted-color);
+	}
+
+	.settings-test-block {
+		margin-top: 0.9rem;
+		padding: 0.9rem 1rem;
+		border-radius: 0.85rem;
+		border: 1px solid var(--border-color-default);
+		background: var(--field-color);
+	}
+
+	.settings-test-label {
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--muted-color);
+	}
+
+	.settings-test-value {
+		font-size: 0.9rem;
+		line-height: 1.5;
+		color: var(--on-surface-color-strong);
+	}
+
+	.settings-endpoint-hint {
+		margin-top: 0.45rem;
+		font-size: 0.74rem;
+		color: var(--muted-color);
+		line-height: 1.5;
+	}
+
+	.settings-endpoint-hint code {
+		font-family: ui-monospace, monospace;
+		background: var(--surface-hover-color);
+		padding: 0.1em 0.35em;
+		border-radius: 0.3em;
+	}
+
+	.settings-test-error {
+		padding: 0.8rem 0.9rem;
+		border-radius: 0.85rem;
+		border: 1px solid color-mix(in srgb, var(--danger-color) 45%, transparent);
+		background: color-mix(in srgb, var(--danger-color) 10%, transparent);
+		color: var(--danger-color);
+		font-size: 0.82rem;
+	}
 	.settings-radio-description {
 		margin-top: 0.25rem;
 		font-size: 0.75rem;

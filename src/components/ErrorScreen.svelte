@@ -2,15 +2,19 @@
   interface Props {
     message: string;
     onRetry: () => void;
+    debugUrl?: string;
   }
 
-  let { message, onRetry }: Props = $props();
+  let { message, onRetry, debugUrl = '' }: Props = $props();
 </script>
 
 <div class="screen">
   <span class="error-text">Something went wrong. Please check microphone permissions.</span>
   {#if message}
     <span class="error-detail">{message}</span>
+  {/if}
+  {#if debugUrl}
+    <span class="debug-detail">Translate endpoint: {debugUrl}</span>
   {/if}
   <button class="retry" onclick={onRetry}>
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -41,6 +45,15 @@
     max-width: 500px;
     text-align: center;
     word-break: break-word;
+  }
+
+  .debug-detail {
+    font-size: 0.72rem;
+    color: var(--on-surface-color);
+    max-width: 620px;
+    text-align: center;
+    word-break: break-word;
+    opacity: 0.82;
   }
 
   .retry {

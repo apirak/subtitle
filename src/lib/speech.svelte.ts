@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { AppStatus, SubtitleLine } from "./types";
+import { translateWithOpenAI, type TranslationConfig } from "./openai-translator";
 
 const MAX_SUBTITLES = 12;
 
@@ -366,7 +367,7 @@ class Speech {
 	};
 
 	stop = async () => {
-		console.log("[RemoteASR] stop called, engine:", this.engine);
+		console.log("[Speech] stop called, engine:", this.engine);
 		if (this._subtitleUnlisten) {
 			this._subtitleUnlisten();
 			this._subtitleUnlisten = null;
@@ -410,40 +411,23 @@ class Speech {
 			return "";
 		}
 
-		if (this.translationEngine === "remote" || this.translationEngine === "ollama") {
-			if (!this.translationEndpoint.trim()) {
-				throw new Error("Translation endpoint is not configured");
-			}
-
-			const response = await fetch(this.translationEndpoint, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					...(this.translationApiKey ? { Authorization: `Bearer ${this.translationApiKey}` } : {}),
-				},
-				body: JSON.stringify({
-					model: this.translationModel || (this.translationEngine === "ollama" ? "qwen2.5:3b" : "gpt-4o-mini"),
-					messages: [
-						{
-							role: "system",
-							content: `Translate the user's text from ${sourceLang} to ${targetLang}. Return only the translated text.`,
-						},
-						{ role: "user", content: text },
-					],
-					temperature: 0.2,
-				}),
-			});
-
-			if (!response.ok) {
-				throw new Error(`Translation request failed: ${response.status}`);
-			}
-
-			const payload = (await response.json()) as {
-				choices?: Array<{ message?: { content?: string } }>;
+		if (this.translationEngine === "remote") {
+			const config: TranslationConfig = {
+				engine: "remote",
+				model: this.translationModel,
+				endpoint: this.translationEndpoint,
+				apiKey: this.translationApiKey,
 			};
-			return payload.choices?.[0]?.message?.content?.trim() ?? "";
+
+			try {
+				return await translateWithOpenAI(text, sourceLang, targetLang, config);
+			} catch (err) {
+				console.error("[Translation] Error:", err);
+				return "";
+			}
 		}
 
+		// Fallback to backend stub (should not reach here with current UI)
 		try {
 			const result = await invoke<{ original: string; translated: string }>("translate", {
 				text,
@@ -453,7 +437,7 @@ class Speech {
 			return result.translated;
 		} catch (err) {
 			console.error("Translation error:", err);
-			throw err;
+			return "";
 		}
 	};
 

@@ -5,6 +5,7 @@
 	import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from "./lib/languages";
 	import { MOCK_SUBTITLES, MOCK_TRANSLATIONS, MOCK_TRANSLATIONS_2 } from "./lib/mockData";
 	import { getApiKey } from "./lib/stronghold";
+	import { resolveOpenAICompatibleEndpoint } from "./lib/api-connection";
 	import IdleScreen from "./components/IdleScreen.svelte";
 	import ListeningScreen from "./components/ListeningScreen.svelte";
 	import ErrorScreen from "./components/ErrorScreen.svelte";
@@ -33,6 +34,7 @@
 	let translationModel = $state("");
 	let translationApiKey = $state("");
 	let isMockMode = $state(false);
+	let isLoadingApiKeys = $state(true); // Block Start button until keys load
 	let altPressed = $state(false);
 
 	const translatedIds1 = new Set<string>();
@@ -59,6 +61,7 @@
 		window.addEventListener("blur", handleBlur);
 
 		const loadSettings = async () => {
+			isLoadingApiKeys = true;
 			try {
 				const settings = await invoke<{
 					theme: string;
@@ -102,23 +105,27 @@
 					}
 				}
 
+				isLoadingApiKeys = false; // Mark loading complete
+
+				// Load translation API key in background (non-blocking)
 				const translationKeyName = settings.translation_api_key_name;
 				if (translationKeyName) {
-					try {
-						const result = await getApiKey(translationKeyName);
-						if (result) {
-							translationApiKey = result;
-							speech.translationApiKey = result;
+					getApiKey(translationKeyName)
+						.then((result) => {
+							if (result) {
+								translationApiKey = result;
+								speech.translationApiKey = result;
 						}
-					} catch (err) {
+					})
+					.catch((err) => {
 						console.error("Failed to load translation API key from Stronghold:", err);
-					}
+					});
 				}
 			} catch (err) {
 				console.error("Failed to load settings:", err);
+				isLoadingApiKeys = false; // Mark loading complete even on error
 			}
 		};
-
 		void loadSettings();
 
 		return () => {
@@ -134,6 +141,9 @@
 		targetLang2 === "none"
 			? "Translation 2"
 			: (TARGET_LANGUAGES.find((l) => l.value === targetLang2)?.label ?? "Translation 2")
+	);
+	let translationDebugUrl = $derived(
+		translationEngine === "remote" ? resolveOpenAICompatibleEndpoint(translationEndpoint) : ""
 	);
 
 	function resetTranslationState() {
@@ -295,6 +305,8 @@
 			targetLabel={targetLabel1}
 			onStart={handleStart}
 			onSettings={() => (settingsSplitOpen = true)}
+			{isLoadingApiKeys}
+			requiresRemoteApiKey={selectedEngine === "remote" && !apiKey}
 		/>
 	{:else if speech.status === "listening"}
 		<ListeningScreen
@@ -306,9 +318,10 @@
 			{targetLabel2}
 			onStop={isMockMode ? exitMockMode : speech.stop}
 			{isMockMode}
+			{translationDebugUrl}
 		/>
 	{:else if speech.status === "error"}
-		<ErrorScreen message={speech.errorMessage} onRetry={speech.start} />
+		<ErrorScreen message={speech.errorMessage} onRetry={speech.start} debugUrl={translationDebugUrl} />
 	{/if}
 
 	<SettingsSplitModal

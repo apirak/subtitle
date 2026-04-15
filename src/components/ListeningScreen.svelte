@@ -9,6 +9,7 @@
     sourceLabel: string;
     targetLabel1: string;
     targetLabel2: string;
+    translationDebugUrl?: string;
     onStop: () => void;
     isMockMode?: boolean;
   }
@@ -20,6 +21,7 @@
     sourceLabel,
     targetLabel1,
     targetLabel2,
+    translationDebugUrl = '',
     onStop,
     isMockMode = false,
   }: Props = $props();
@@ -30,10 +32,15 @@
 </svelte:head>
 
 <div class="status-bar backdrop-blur-md">
-  <div class="status-indicator">
-    <span class="status-dot"></span>
-    {isMockMode ? 'Mock Preview' : 'Listening…'}
-    <span class="lang-badge">{sourceLabel} | {targetLabel1} | {targetLabel2}</span>
+  <div class="status-stack">
+    <div class="status-indicator">
+      <span class="status-dot"></span>
+      {isMockMode ? 'Mock Preview' : 'Listening…'}
+      <span class="lang-badge">{sourceLabel} | {targetLabel1} | {targetLabel2}</span>
+    </div>
+    {#if translationDebugUrl}
+      <div class="debug-url">Translate endpoint: {translationDebugUrl}</div>
+    {/if}
   </div>
   <button class="stop" onclick={onStop}>Stop</button>
 </div>
@@ -77,6 +84,13 @@
     color: var(--on-bg-color);
   }
 
+  .status-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
   .status-dot {
     width: 10px;
     height: 10px;
@@ -96,6 +110,16 @@
     border: 1px solid var(--border-color-default);
     letter-spacing: 0.04em;
     text-transform: uppercase;
+  }
+
+  .debug-url {
+    max-width: min(72vw, 920px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.68rem;
+    color: var(--on-surface-color);
+    opacity: 0.82;
   }
 
   .stop {

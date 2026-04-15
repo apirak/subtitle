@@ -4,9 +4,12 @@
     targetLabel: string;
     onStart: () => void;
     onSettings: () => void;
+    isLoadingApiKeys?: boolean;
+    requiresRemoteApiKey?: boolean;
   }
 
-  let { sourceLabel, targetLabel, onStart, onSettings }: Props = $props();
+  let { sourceLabel, targetLabel, onStart, onSettings, isLoadingApiKeys = false, requiresRemoteApiKey = false }: Props = $props();
+
 </script>
 
 <div class="screen-shell flex flex-col items-center gap-8">
@@ -19,13 +22,29 @@
     class="start-button flex items-center justify-center gap-2 text-base font-semibold rounded-[60px] cursor-pointer transition-all duration-250 ease backdrop-blur-md hover:scale-[1.03] active:scale-[0.97]"
     style="padding: 14px 32px;"
     onclick={onStart}
+    disabled={isLoadingApiKeys || requiresRemoteApiKey}
+    title={requiresRemoteApiKey ? "API key not configured. Check Settings." : isLoadingApiKeys ? "Loading settings..." : ""}
   >
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <line x1="12" y1="19" x2="12" y2="22" />
-    </svg>
-    Start
+    {#if isLoadingApiKeys}
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin">
+        <circle cx="12" cy="12" r="10" fill="none" stroke-dasharray="15.7 47.1" />
+      </svg>
+      Loading...
+    {:else if requiresRemoteApiKey}
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+      Configure API Key
+    {:else}
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <line x1="12" y1="19" x2="12" y2="22" />
+      </svg>
+      Start
+    {/if}
   </button>
 
   <button
@@ -60,9 +79,30 @@
     box-shadow: 0 12px 32px color-mix(in srgb, var(--accent-color) 28%, transparent);
   }
 
-  .start-button:hover {
+  .start-button:hover:not(:disabled) {
     background: var(--accent-color-hover);
     border-color: var(--accent-color-hover);
+  }
+
+  .start-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: var(--accent-color);
+  }
+
+  .start-button:disabled:hover {
+    scale: 1;
+    background: var(--accent-color);
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  :global(.animate-spin) {
+    animation: spin 1s linear infinite;
   }
 
   .settings-button {

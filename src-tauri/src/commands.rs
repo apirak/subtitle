@@ -1,5 +1,6 @@
 use crate::audio;
 use crate::vosk::VoskAsr;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_store::StoreExt;
@@ -20,6 +21,38 @@ pub struct AsrResponse {
 pub struct TranslateResponse {
     pub original: String,
     pub translated: String,
+}
+
+fn normalize_translation_endpoint(endpoint: &str) -> String {
+    let endpoint = endpoint.trim().trim_end_matches('/');
+
+    // Already a full chat completions URL or special inference path — use as-is.
+    if endpoint.ends_with("/chat/completions") || endpoint.contains("/v1/inference/") {
+        return endpoint.to_string();
+    }
+
+    // DashScope base path: .../compatible-mode/v1  →  .../chat/completions
+    // If caller already provides a deeper compatible-mode path, keep as-is.
+    if endpoint.contains("/compatible-mode/v1") {
+        if endpoint.ends_with("/compatible-mode/v1") {
+            return format!("{}/chat/completions", endpoint);
+        }
+        return endpoint.to_string();
+    }
+
+    // Gemini: .../v1beta/openai  →  .../v1beta/openai/chat/completions
+    // DeepInfra: .../v1/openai  →  .../v1/openai/chat/completions
+    if endpoint.ends_with("/openai") {
+        return format!("{}/chat/completions", endpoint);
+    }
+
+    // Standard /v1 base  →  /v1/chat/completions
+    if endpoint.ends_with("/v1") || endpoint.ends_with("/v1beta") {
+        return format!("{}/chat/completions", endpoint);
+    }
+
+    // Bare host  →  /v1/chat/completions
+    format!("{}/v1/chat/completions", endpoint)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,8 +103,92 @@ pub async fn translate(
     text: String,
     source_lang: String,
     target_lang: String,
+    endpoint: String,
+    model: String,
+    api_key: String,
 ) -> Result<TranslateResponse, String> {
-    let translated = format!("[translated: {}]", text);
+    if endpoint.trim().is_empty() {
+        return Err("Translation endpoint is not configured".to_string());
+    }
+    if model.trim().is_empty() {
+        return Err("Translation model is not configured".to_string());
+    }
+    if api_key.trim().is_empty() {
+        return Err("Translation API key is not configured".to_string());
+    }
+
+    let url = normalize_translation_endpoint(&endpoint);
+
+    let client = Client::new();
+    let payload = serde_json::json!({
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": format!(
+                    "Translate the user's text from {} to {}. Return only the translated text.",
+                    source_lang, target_lang
+                )
+            },
+            {
+                "role": "user",
+                "content": text
+            }
+        ],
+        "temperature": 0.2,
+    });
+
+    log::debug!("[Translate] Calling endpoint: {}", endpoint);
+    log::debug!("[Translate] Resolved URL: {}", url);
+    log::debug!("[Translate] Model: {}", model);
+    log::debug!("[Translate] API key length: {}", api_key.len());
+
+    let response = client
+        .post(&url)
+        .bearer_auth(&api_key)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| {
+            log::error!("[Translate] Request send failed: {}", e);
+            e.to_string()
+        })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response.text().await.unwrap_or_default();
+        log::error!("[Translate] API returned status {}: {}", status.as_u16(), error_body);
+        if status.as_u16() == 401 {
+            return Err("Invalid API key (401 Unauthorized)".to_string());
+        }
+        if status.as_u16() == 429 {
+            return Err("Rate limited - try again later (429)".to_string());
+        }
+        return Err(format!(
+            "API error {} at {}: {}",
+            status.as_u16(),
+            url,
+            error_body
+        ));
+    }
+
+    let json: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+    let translated = json
+        .get("choices")
+        .and_then(|choices| choices.as_array())
+        .and_then(|choices| choices.first())
+        .and_then(|choice| {
+            choice
+                .get("message")
+                .and_then(|message| message.get("content"))
+                .and_then(|content| content.as_str())
+                .or_else(|| choice.get("text").and_then(|content| content.as_str()))
+        })
+        .map(str::trim)
+        .filter(|content| !content.is_empty())
+        .ok_or_else(|| format!("Empty response from API at {}: {}", url, json))?
+        .to_string();
+
     Ok(TranslateResponse {
         original: text,
         translated,
@@ -404,6 +521,73 @@ pub fn emit_error(app: &AppHandle, code: &str, message: &str) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dotenvy::dotenv;
+    use std::env;
+    use tokio::runtime::Runtime;
+
+    #[test]
+    fn test_normalize_full_chat_completions_preserved() {
+        for url in [
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+            "https://api.deepinfra.com/v1/openai/chat/completions",
+            "https://api.openai.com/v1/chat/completions",
+        ] {
+            assert_eq!(normalize_translation_endpoint(url), url, "should preserve: {}", url);
+        }
+    }
+
+    #[test]
+    fn test_normalize_translation_endpoint_from_v1() {
+        let normalized = normalize_translation_endpoint("https://example.com/v1");
+        assert_eq!(normalized, "https://example.com/v1/chat/completions");
+    }
+
+    #[test]
+    fn test_normalize_translation_endpoint_from_base_url() {
+        let normalized = normalize_translation_endpoint("https://example.com");
+        assert_eq!(normalized, "https://example.com/v1/chat/completions");
+    }
+
+    #[test]
+    fn test_normalize_translation_endpoint_dashscope_base_preserved() {
+        let endpoint = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1";
+        let normalized = normalize_translation_endpoint(endpoint);
+        assert_eq!(
+            normalized,
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn test_normalize_translation_endpoint_deepinfra_inference_preserved() {
+        let endpoint = "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-32B";
+        let normalized = normalize_translation_endpoint(endpoint);
+        assert_eq!(normalized, endpoint);
+    }
+
+    #[test]
+    fn test_normalize_gemini_base_url() {
+        // Gemini base: .../v1beta/openai
+        let normalized = normalize_translation_endpoint(
+            "https://generativelanguage.googleapis.com/v1beta/openai",
+        );
+        assert_eq!(
+            normalized,
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deepinfra_openai_base_url() {
+        // DeepInfra OpenAI-compat base: .../v1/openai
+        let normalized =
+            normalize_translation_endpoint("https://api.deepinfra.com/v1/openai");
+        assert_eq!(
+            normalized,
+            "https://api.deepinfra.com/v1/openai/chat/completions"
+        );
+    }
 
     #[test]
     fn test_settings_serialization_roundtrip() {
@@ -517,5 +701,79 @@ mod tests {
 
         assert_eq!(deserialized.sample_rate, 16000);
         assert_eq!(deserialized.channels, 1);
+    }
+
+    fn run_ai_translation_test(
+        provider: &str,
+        endpoint: &str,
+        model: &str,
+        env_key_name: &str,
+        source_lang: &str,
+        target_lang: &str,
+    ) {
+        let _ = dotenv();
+        let api_key = env::var(env_key_name)
+            .unwrap_or_else(|_| panic!("Missing env var {} for {} test", env_key_name, provider));
+
+        let rt = Runtime::new().expect("failed to create tokio runtime");
+        let result = rt.block_on(translate(
+            "Hello, this is a test.".to_string(),
+            source_lang.to_string(),
+            target_lang.to_string(),
+            endpoint.to_string(),
+            model.to_string(),
+            api_key,
+        ));
+
+        match result {
+            Ok(resp) => {
+                assert!(
+                    !resp.translated.trim().is_empty(),
+                    "{} translation should not be empty",
+                    provider
+                );
+                println!("[AI TEST] {} translated: {}", provider, resp.translated);
+            }
+            Err(err) => panic!("{} translation failed: {}", provider, err),
+        }
+    }
+
+    #[test]
+    #[ignore = "live API test"]
+    fn ai_dashscope_translate_live() {
+        run_ai_translation_test(
+            "dashscope",
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            "qwen-plus",
+            "DASHSCOPE_API_KEY",
+            "en-US",
+            "th",
+        );
+    }
+
+    #[test]
+    #[ignore = "live API test"]
+    fn ai_deepinfra_translate_live() {
+        run_ai_translation_test(
+            "deepinfra",
+            "https://api.deepinfra.com/v1/openai",
+            "Qwen/Qwen3.5-2B",
+            "VITE_DEEPINFRA_API_KEY",
+            "en-US",
+            "th",
+        );
+    }
+
+    #[test]
+    #[ignore = "live API test"]
+    fn ai_gemini_translate_live() {
+        run_ai_translation_test(
+            "gemini",
+            "https://generativelanguage.googleapis.com/v1beta/openai",
+            "gemini-3-flash-preview",
+            "YOUR_GOOGLE_AI_STUDIO_KEY",
+            "en-US",
+            "th",
+        );
     }
 }
