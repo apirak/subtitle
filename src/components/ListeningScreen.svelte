@@ -4,25 +4,36 @@
 
   interface Props {
     subtitles: SubtitleLineType[];
-    translations: Record<string, string>;
+    translations1: Record<string, string>;
+    translations2: Record<string, string>;
     sourceLabel: string;
-    targetLabel: string;
+    targetLabel1: string;
+    targetLabel2: string;
     onStop: () => void;
     isMockMode?: boolean;
   }
 
-  let { subtitles, translations, sourceLabel, targetLabel, onStop, isMockMode = false }: Props = $props();
+  let {
+    subtitles,
+    translations1,
+    translations2,
+    sourceLabel,
+    targetLabel1,
+    targetLabel2,
+    onStop,
+    isMockMode = false,
+  }: Props = $props();
 </script>
 
 <svelte:head>
   <title>Listening… · Real-time Subtitles</title>
 </svelte:head>
 
-<div class="status-bar bg-black/5 backdrop-blur-md">
+<div class="status-bar backdrop-blur-md">
   <div class="status-indicator">
     <span class="status-dot"></span>
     {isMockMode ? 'Mock Preview' : 'Listening…'}
-    <span class="lang-badge">{sourceLabel} → {targetLabel}</span>
+    <span class="lang-badge">{sourceLabel} | {targetLabel1} | {targetLabel2}</span>
   </div>
   <button class="stop" onclick={onStop}>Stop</button>
 </div>
@@ -32,8 +43,10 @@
     {#each subtitles as line, i}
       <SubtitleLine
         text={line.text}
-        translation={translations[line.id]}
-        isTranslating={!line.id.startsWith('interim-') && !translations[line.id]}
+        translation1={translations1[line.id]}
+        translation2={translations2[line.id]}
+        isTranslating1={!line.id.startsWith('interim-') && !translations1[line.id]}
+        isTranslating2={!line.id.startsWith('interim-') && !translations2[line.id]}
         isLast={i === subtitles.length - 1}
       />
     {/each}
@@ -53,7 +66,7 @@
     justify-content: space-between;
     padding: 16px 24px;
     z-index: 20;
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, transparent 100%);
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--bg-color) 74%, transparent) 0%, transparent 100%);
   }
 
   .status-indicator {
@@ -61,15 +74,15 @@
     align-items: center;
     gap: 10px;
     font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--on-bg-color);
   }
 
   .status-dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #4ade80;
-    box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+    background: var(--success-color);
+    box-shadow: 0 0 8px var(--success-color-soft);
     animation: pulseDot 2s ease-in-out infinite;
   }
 
@@ -78,8 +91,9 @@
     font-weight: 600;
     padding: 3px 8px;
     border-radius: 4px;
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.45);
+    background: var(--surface-hover-color);
+    color: var(--on-surface-color-strong);
+    border: 1px solid var(--border-color-default);
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
@@ -89,17 +103,17 @@
     font-size: 0.85rem;
     font-weight: 500;
     font-family: inherit;
-    color: rgba(255, 255, 255, 0.7);
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--on-surface-color-strong);
+    background: var(--field-color);
+    border: 1px solid var(--border-color-default);
     border-radius: 20px;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .stop:hover {
-    color: #fff;
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.35);
+    color: var(--on-surface-color-strong);
+    background: var(--surface-hover-color);
+    border-color: var(--border-color-strong);
   }
 </style>

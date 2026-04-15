@@ -139,3 +139,31 @@ export const MOCK_TRANSLATIONS: Record<string, string> = {
 	"mock-23": "ตรวจภาพรวมสุดท้ายก่อนเริ่มพัฒนาฟีเจอร์จริง",
 	"mock-24": "กด Stop เพื่อออกจากโหมด mock และกลับหน้าเริ่มต้น",
 };
+
+export const MOCK_TRANSLATIONS_2: Record<string, string> = {
+	"mock-01": "Good evening everyone.",
+	"mock-02": "Welcome to this live caption preview.",
+	"mock-03": "We are checking subtitle readability first.",
+	"mock-04": "Short line.",
+	"mock-05":
+		"This sentence is intentionally much longer so we can inspect wrapping behavior on smaller windows and narrow aspect ratios.",
+	"mock-06": "Please keep your microphone muted for now.",
+	"mock-07": "The speaker will begin in thirty seconds.",
+	"mock-08": "Another short one.",
+	"mock-09": "We can also validate vertical spacing between source and translation lines.",
+	"mock-10": "Animation timing should feel calm, not distracting.",
+	"mock-11": "Can everyone at the back read this clearly?",
+	"mock-12": "Contrast is critical for projected environments.",
+	"mock-13": "Now we test a number: 1234567890.",
+	"mock-14": "Now we test punctuation: commas, periods, and question marks?",
+	"mock-15": "Layout should still look stable with mixed-length content.",
+	"mock-16": "Please adjust subtitle position to about sixty percent.",
+	"mock-17": "This helps evaluate readability over presentation slides.",
+	"mock-18": "If the text is too large, reduce font size slightly.",
+	"mock-19": "If the text is too dim, increase opacity.",
+	"mock-20": "A quick reminder: this is mock mode only.",
+	"mock-21": "No real audio is being processed right now.",
+	"mock-22": "This line is here to ensure we exceed twenty rows.",
+	"mock-23": "Final visual check before implementation work starts.",
+	"mock-24": "Press Stop to leave mock mode and return to idle.",
+};

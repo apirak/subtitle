@@ -24,13 +24,18 @@ pub struct TranslateResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Settings {
+    pub theme: String,
     pub engine: String,
     pub source_lang: String,
     pub target_lang: String,
+    pub target_lang_2: String,
     pub overlay_transparency: f32,
     pub overlay_font_size: u32,
     pub subtitle_position: u32,
     pub translation_engine: String,
+    pub translation_endpoint: Option<String>,
+    pub translation_model: Option<String>,
+    pub translation_api_key_name: Option<String>,
     pub remote_endpoint: Option<String>,
     pub remote_api_key_name: Option<String>,
 }
@@ -82,6 +87,13 @@ pub async fn settings_get(app: tauri::AppHandle) -> Result<Settings, String> {
             .unwrap_or_else(|| "browser".to_string())
     }
 
+    let theme = match store.get("theme") {
+        Some(v) => v
+            .as_str()
+            .map(String::from)
+            .unwrap_or_else(|| "night".to_string()),
+        None => "night".to_string(),
+    };
     let engine = match store.get("engine") {
         Some(v) => opt_str_to_string(v.as_str()),
         None => "browser".to_string(),
@@ -93,6 +105,13 @@ pub async fn settings_get(app: tauri::AppHandle) -> Result<Settings, String> {
     let target_lang = match store.get("target_lang") {
         Some(v) => opt_str_to_string(v.as_str()),
         None => "es".to_string(),
+    };
+    let target_lang_2 = match store.get("target_lang_2") {
+        Some(v) => v
+            .as_str()
+            .map(String::from)
+            .unwrap_or_else(|| "none".to_string()),
+        None => "none".to_string(),
     };
     let overlay_transparency = store
         .get("overlay_transparency")
@@ -108,7 +127,19 @@ pub async fn settings_get(app: tauri::AppHandle) -> Result<Settings, String> {
         .unwrap_or(20) as u32;
     let translation_engine = match store.get("translation_engine") {
         Some(v) => opt_str_to_string(v.as_str()),
-        None => "none".to_string(),
+        None => "remote".to_string(),
+    };
+    let translation_endpoint = match store.get("translation_endpoint") {
+        Some(v) => v.as_str().map(String::from),
+        None => None,
+    };
+    let translation_model = match store.get("translation_model") {
+        Some(v) => v.as_str().map(String::from),
+        None => None,
+    };
+    let translation_api_key_name = match store.get("translation_api_key_name") {
+        Some(v) => v.as_str().map(String::from),
+        None => None,
     };
     let remote_endpoint = match store.get("remote_endpoint") {
         Some(v) => v.as_str().map(String::from),
@@ -120,13 +151,18 @@ pub async fn settings_get(app: tauri::AppHandle) -> Result<Settings, String> {
     };
 
     Ok(Settings {
+        theme,
         engine,
         source_lang,
         target_lang,
+        target_lang_2,
         overlay_transparency,
         overlay_font_size,
         subtitle_position,
         translation_engine,
+        translation_endpoint,
+        translation_model,
+        translation_api_key_name,
         remote_endpoint,
         remote_api_key_name,
     })
@@ -138,9 +174,14 @@ pub async fn settings_set(app: tauri::AppHandle, key: String, value: String) -> 
 
     // Determine type and store appropriately
     match key.as_str() {
-        "engine"
+        "theme"
+        | "engine"
         | "source_lang"
         | "target_lang"
+        | "target_lang_2"
+        | "translation_endpoint"
+        | "translation_model"
+        | "translation_api_key_name"
         | "remote_endpoint"
         | "remote_api_key_name"
         | "translation_engine"
@@ -367,13 +408,18 @@ mod tests {
     #[test]
     fn test_settings_serialization_roundtrip() {
         let settings = Settings {
+            theme: "night".to_string(),
             engine: "browser".to_string(),
             source_lang: "en-US".to_string(),
             target_lang: "th".to_string(),
+            target_lang_2: "ja".to_string(),
             overlay_transparency: 0.8,
             overlay_font_size: 32,
             subtitle_position: 25,
             translation_engine: "none".to_string(),
+            translation_endpoint: Some("https://api.example.com/v1/chat/completions".to_string()),
+            translation_model: Some("gpt-4o-mini".to_string()),
+            translation_api_key_name: Some("translation".to_string()),
             remote_endpoint: Some("https://api.openai.com".to_string()),
             remote_api_key_name: Some("openai".to_string()),
         };
@@ -384,6 +430,7 @@ mod tests {
         assert_eq!(deserialized.engine, settings.engine);
         assert_eq!(deserialized.source_lang, settings.source_lang);
         assert_eq!(deserialized.target_lang, settings.target_lang);
+        assert_eq!(deserialized.target_lang_2, settings.target_lang_2);
         assert_eq!(
             deserialized.overlay_transparency,
             settings.overlay_transparency
@@ -391,6 +438,12 @@ mod tests {
         assert_eq!(deserialized.overlay_font_size, settings.overlay_font_size);
         assert_eq!(deserialized.subtitle_position, settings.subtitle_position);
         assert_eq!(deserialized.translation_engine, settings.translation_engine);
+        assert_eq!(deserialized.translation_endpoint, settings.translation_endpoint);
+        assert_eq!(deserialized.translation_model, settings.translation_model);
+        assert_eq!(
+            deserialized.translation_api_key_name,
+            settings.translation_api_key_name
+        );
         assert_eq!(deserialized.remote_endpoint, settings.remote_endpoint);
         assert_eq!(
             deserialized.remote_api_key_name,
@@ -401,13 +454,18 @@ mod tests {
     #[test]
     fn test_settings_default_values() {
         let settings = Settings {
+            theme: "night".to_string(),
             engine: "browser".to_string(),
             source_lang: "en-US".to_string(),
             target_lang: "es".to_string(),
+            target_lang_2: "none".to_string(),
             overlay_transparency: 0.7,
             overlay_font_size: 24,
             subtitle_position: 20,
-            translation_engine: "none".to_string(),
+            translation_engine: "remote".to_string(),
+            translation_endpoint: None,
+            translation_model: None,
+            translation_api_key_name: None,
             remote_endpoint: None,
             remote_api_key_name: None,
         };

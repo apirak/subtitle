@@ -55,7 +55,7 @@
 		{ value: "none", label: "None" },
 		{ value: "ollama", label: "Ollama (Local)" },
 		{ value: "nllb", label: "NLLB (On-Device)" },
-		{ value: "remote", label: "Remote (API)" },
+		{ value: "remote", label: "OpenAI Compatible" },
 	];
 </script>
 

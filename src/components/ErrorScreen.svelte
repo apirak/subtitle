@@ -32,12 +32,12 @@
 
   .error-text {
     font-size: 1rem;
-    color: #ef4444;
+    color: var(--danger-color);
   }
 
   .error-detail {
     font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--on-bg-color);
     max-width: 500px;
     text-align: center;
     word-break: break-word;
@@ -52,9 +52,9 @@
     font-size: 1rem;
     font-weight: 600;
     font-family: inherit;
-    color: #fff;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--on-accent-color);
+    background: var(--accent-color);
+    border: 1px solid var(--accent-color);
     border-radius: 60px;
     cursor: pointer;
     transition: all 0.25s ease;
@@ -62,7 +62,7 @@
   }
 
   .retry:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.25);
+    background: var(--accent-color-hover);
+    border-color: var(--accent-color-hover);
   }
 </style>

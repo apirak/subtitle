@@ -1,5 +1,175 @@
 @import "tailwindcss";
 
+:root {
+  --bg-color: #000000;
+  --bg-color-hover: #111214;
+  --on-bg-color: rgba(255, 255, 255, 0.72);
+  --on-bg-color-strong: #ffffff;
+  --surface-color: rgba(18, 18, 20, 0.96);
+  --surface-alt-color: rgba(255, 255, 255, 0.03);
+  --surface-elevated-color: rgba(255, 255, 255, 0.03);
+  --surface-hover-color: rgba(255, 255, 255, 0.08);
+  --surface-active-color: rgba(255, 255, 255, 0.12);
+  --field-color: rgba(255, 255, 255, 0.04);
+  --field-hover-color: rgba(255, 255, 255, 0.08);
+  --on-surface-color: rgba(255, 255, 255, 0.68);
+  --on-surface-color-strong: #ffffff;
+  --border-color-subtle: rgba(255, 255, 255, 0.08);
+  --border-color-default: rgba(255, 255, 255, 0.12);
+  --border-color-strong: rgba(255, 255, 255, 0.24);
+  --accent-color: #60a5fa;
+  --accent-color-hover: #93c5fd;
+  --on-accent-color: #08111f;
+  --success-color: #4ade80;
+  --success-color-soft: rgba(74, 222, 128, 0.22);
+  --danger-color: #ef4444;
+  --danger-color-hover: #f87171;
+  --on-danger-color: #ffffff;
+  --muted-color: rgba(255, 255, 255, 0.48);
+  --placeholder-color: rgba(255, 255, 255, 0.3);
+  --overlay-backdrop: rgba(0, 0, 0, 0.5);
+  --focus-ring-color: rgba(96, 165, 250, 0.25);
+
+  --theme-bg: var(--bg-color);
+  --theme-text: var(--on-bg-color-strong);
+  --theme-text-dim: var(--on-bg-color);
+  --theme-accent: var(--accent-color);
+  --screen-title: var(--on-bg-color-strong);
+  --screen-subtitle: var(--on-bg-color);
+  --screen-button-bg: var(--surface-hover-color);
+  --screen-button-border: var(--border-color-default);
+  --screen-button-hover-bg: var(--surface-active-color);
+  --screen-button-hover-border: var(--border-color-strong);
+  --screen-icon: var(--muted-color);
+  --screen-icon-hover: var(--on-bg-color-strong);
+  --listening-bar-bg: linear-gradient(to bottom, color-mix(in srgb, var(--bg-color) 68%, transparent) 0%, transparent 100%);
+  --listening-indicator: var(--on-bg-color);
+  --listening-badge-bg: var(--surface-hover-color);
+  --listening-badge-text: var(--on-surface-color);
+  --stop-bg: var(--field-color);
+  --stop-border: var(--border-color-default);
+  --stop-text: var(--on-surface-color-strong);
+  --stop-hover-bg: color-mix(in srgb, var(--danger-color) 18%, transparent);
+  --stop-hover-border: color-mix(in srgb, var(--danger-color) 45%, transparent);
+  --subtitle-main: var(--on-bg-color-strong);
+  --subtitle-secondary: var(--on-bg-color);
+  --subtitle-muted: color-mix(in srgb, var(--on-bg-color-strong) 25%, transparent);
+}
+
+[data-theme="night"] {
+  --bg-color: #000000;
+  --bg-color-hover: #111214;
+  --on-bg-color: rgba(255, 255, 255, 0.72);
+  --on-bg-color-strong: #ffffff;
+  --surface-color: rgba(18, 18, 20, 0.96);
+  --surface-alt-color: rgba(255, 255, 255, 0.03);
+  --surface-elevated-color: rgba(255, 255, 255, 0.03);
+  --surface-hover-color: rgba(255, 255, 255, 0.08);
+  --surface-active-color: rgba(255, 255, 255, 0.12);
+  --field-color: rgba(255, 255, 255, 0.04);
+  --field-hover-color: rgba(255, 255, 255, 0.08);
+  --on-surface-color: rgba(255, 255, 255, 0.68);
+  --on-surface-color-strong: #ffffff;
+  --border-color-subtle: rgba(255, 255, 255, 0.08);
+  --border-color-default: rgba(255, 255, 255, 0.12);
+  --border-color-strong: rgba(255, 255, 255, 0.24);
+  --accent-color: #60a5fa;
+  --accent-color-hover: #93c5fd;
+  --on-accent-color: #08111f;
+  --success-color: #4ade80;
+  --success-color-soft: rgba(74, 222, 128, 0.22);
+  --danger-color: #ef4444;
+  --danger-color-hover: #f87171;
+  --on-danger-color: #ffffff;
+  --muted-color: rgba(255, 255, 255, 0.48);
+  --placeholder-color: rgba(255, 255, 255, 0.3);
+  --overlay-backdrop: rgba(0, 0, 0, 0.5);
+  --focus-ring-color: rgba(96, 165, 250, 0.25);
+}
+
+[data-theme="day"] {
+  --bg-color: #f5f7fb;
+  --bg-color-hover: #eef2f8;
+  --on-bg-color: rgba(16, 24, 40, 0.7);
+  --on-bg-color-strong: #101828;
+  --surface-color: rgba(255, 255, 255, 0.96);
+  --surface-alt-color: rgba(248, 250, 252, 0.92);
+  --surface-elevated-color: #ffffff;
+  --surface-hover-color: rgba(226, 232, 240, 0.72);
+  --surface-active-color: rgba(226, 232, 240, 0.96);
+  --field-color: #ffffff;
+  --field-hover-color: #f8fafc;
+  --on-surface-color: rgba(16, 24, 40, 0.72);
+  --on-surface-color-strong: #101828;
+  --border-color-subtle: rgba(148, 163, 184, 0.22);
+  --border-color-default: rgba(148, 163, 184, 0.35);
+  --border-color-strong: rgba(100, 116, 139, 0.5);
+  --accent-color: #2563eb;
+  --accent-color-hover: #1d4ed8;
+  --on-accent-color: #ffffff;
+  --success-color: #16a34a;
+  --success-color-soft: rgba(22, 163, 74, 0.18);
+  --danger-color: #ef4444;
+  --danger-color-hover: #dc2626;
+  --on-danger-color: #ffffff;
+  --muted-color: rgba(16, 24, 40, 0.5);
+  --placeholder-color: rgba(100, 116, 139, 0.7);
+  --overlay-backdrop: rgba(15, 23, 42, 0.28);
+  --focus-ring-color: rgba(37, 99, 235, 0.2);
+}
+
+[data-theme="toy"] {
+  --bg-color: #29282c;
+  --bg-color-hover: #323136;
+  --on-bg-color: rgba(255, 255, 255, 0.82);
+  --on-bg-color-strong: #ffffff;
+  --surface-color: #29282c;
+  --surface-alt-color: #f7bb0e;
+  --surface-elevated-color: #ffffff;
+  --surface-hover-color: #f7bb0e;
+  --surface-active-color: #f00000;
+  --field-color: #ffffff;
+  --field-hover-color: #fff1be;
+  --on-surface-color: rgba(41, 40, 44, 0.78);
+  --on-surface-color-strong: #29282c;
+  --border-color-subtle: rgba(41, 40, 44, 0.2);
+  --border-color-default: #29282c;
+  --border-color-strong: #f00000;
+  --accent-color: #f7bb0e;
+  --accent-color-hover: #ffd14e;
+  --on-accent-color: #29282c;
+  --success-color: #f7bb0e;
+  --success-color-soft: rgba(247, 187, 14, 0.22);
+  --danger-color: #f00000;
+  --danger-color-hover: #ff3b3b;
+  --on-danger-color: #ffffff;
+  --muted-color: #f00000;
+  --placeholder-color: rgba(41, 40, 44, 0.45);
+  --overlay-backdrop: rgba(41, 40, 44, 0.45);
+  --focus-ring-color: rgba(240, 0, 0, 0.18);
+
+  --screen-title: #f7bb0e;
+  --screen-subtitle: #ffffff;
+  --screen-button-bg: #f7bb0e;
+  --screen-button-border: #29282c;
+  --screen-button-hover-bg: #ffffff;
+  --screen-button-hover-border: #f00000;
+  --screen-icon: #ffffff;
+  --screen-icon-hover: #f7bb0e;
+  --listening-bar-bg: linear-gradient(to bottom, rgba(41, 40, 44, 0.95) 0%, rgba(41, 40, 44, 0.25) 100%);
+  --listening-indicator: #ffffff;
+  --listening-badge-bg: #f00000;
+  --listening-badge-text: #ffffff;
+  --stop-bg: #ffffff;
+  --stop-border: #29282c;
+  --stop-text: #29282c;
+  --stop-hover-bg: #f7bb0e;
+  --stop-hover-border: #f00000;
+  --subtitle-main: #f7bb0e;
+  --subtitle-secondary: #ffffff;
+  --subtitle-muted: rgba(247, 187, 14, 0.35);
+}
+
 /* *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -7,11 +177,12 @@
 } */
 
 body {
-  background: #000;
-  color: #fff;
+  background: var(--theme-bg);
+  color: var(--theme-text);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+  transition: background-color 180ms ease, color 180ms ease;
 }
 
 @keyframes slideUp {

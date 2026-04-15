@@ -1,41 +1,74 @@
 <script lang="ts">
   interface Props {
     text: string;
-    translation?: string;
-    isTranslating?: boolean;
+    translation1?: string;
+    translation2?: string;
+    isTranslating1?: boolean;
+    isTranslating2?: boolean;
     isLast?: boolean;
   }
 
-  let { text, translation, isTranslating = false, isLast = false }: Props = $props();
+  let {
+    text,
+    translation1,
+    translation2,
+    isTranslating1 = false,
+    isTranslating2 = false,
+    isLast = false,
+  }: Props = $props();
 </script>
 
-<div class="line flex text-3xl text-white gap-16 p-4" class:last={isLast}> <div class="flex-1 flex justify-center text-center">{text}</div>
-  <div class="flex-1 flex justify-center text-center">
-    {#if isTranslating}
-      <div class="text-white/80">
+<div class="line grid grid-cols-3 text-3xl gap-8 p-4" class:last={isLast}>
+  <div class="col flex justify-center text-center">{text}</div>
+
+  <div class="col flex justify-center text-center">
+    {#if isTranslating1}
+      <div class="secondary-text">
         <span class="dot">·</span>
         <span class="dot">·</span>
         <span class="dot">·</span>
       </div>
     {/if}
-    {#if translation}
-      <div class="text-white/80">{translation}</div>
+    {#if translation1}
+      <div class="secondary-text">{translation1}</div>
+    {/if}
+  </div>
+
+  <div class="col flex justify-center text-center">
+    {#if isTranslating2}
+      <div class="secondary-text">
+        <span class="dot">·</span>
+        <span class="dot">·</span>
+        <span class="dot">·</span>
+      </div>
+    {/if}
+    {#if translation2}
+      <div class="secondary-text">{translation2}</div>
     {/if}
   </div>
 </div>
 
 <style>
   .line {
+    color: var(--on-bg-color-strong);
     font-size: 1.8rem;
     font-weight: 500;
     animation: slideUp 0.4s ease-out forwards;
-    opacity: 0.25;
+    opacity: 1;
   }
 
   .line.last {
-    opacity: 1;
-    font-size: 3rem;
+    font-size: 2.4rem;
     font-weight: 600;
+  }
+
+  .secondary-text {
+    color: var(--on-bg-color);
+  }
+
+  .col {
+    min-width: 0;
+    word-break: break-word;
   }
 
   .dot {
