@@ -499,7 +499,6 @@
 									value={currentTranslationEndpoint}
 									oninput={(event) => handleTranslationEndpointChange((event.target as HTMLInputElement).value)}
 								/>
-								<p class="settings-endpoint-hint">e.g. DashScope: <code>…/compatible-mode/v1</code> · DeepInfra: <code>…/v1/openai</code> · Gemini: <code>…/v1beta/openai</code></p>
 							</div>
 
 							<div class="mb-5">
