@@ -9,6 +9,7 @@
     sourceLabel: string;
     targetLabel1: string;
     targetLabel2: string;
+    showTranslation2?: boolean;
     translationDebugUrl?: string;
     onStop: () => void;
     isMockMode?: boolean;
@@ -21,6 +22,7 @@
     sourceLabel,
     targetLabel1,
     targetLabel2,
+    showTranslation2 = true,
     translationDebugUrl = '',
     onStop,
     isMockMode = false,
@@ -36,7 +38,7 @@
     <div class="status-indicator">
       <span class="status-dot"></span>
       {isMockMode ? 'Mock Preview' : 'Listening…'}
-      <span class="lang-badge">{sourceLabel} | {targetLabel1} | {targetLabel2}</span>
+      <span class="lang-badge">{sourceLabel} | {targetLabel1}{showTranslation2 ? ` | ${targetLabel2}` : ''}</span>
     </div>
     {#if translationDebugUrl}
       <div class="debug-url">Translate endpoint: {translationDebugUrl}</div>
@@ -55,6 +57,7 @@
         isTranslating1={!line.id.startsWith('interim-') && !translations1[line.id]}
         isTranslating2={!line.id.startsWith('interim-') && !translations2[line.id]}
         isLast={i === subtitles.length - 1}
+        {showTranslation2}
       />
     {/each}
 

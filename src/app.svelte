@@ -316,6 +316,7 @@
 			{sourceLabel}
 			{targetLabel1}
 			{targetLabel2}
+			showTranslation2={targetLang2 !== "none"}
 			onStop={isMockMode ? exitMockMode : speech.stop}
 			{isMockMode}
 			{translationDebugUrl}

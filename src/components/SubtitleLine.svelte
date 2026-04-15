@@ -6,6 +6,7 @@
     isTranslating1?: boolean;
     isTranslating2?: boolean;
     isLast?: boolean;
+    showTranslation2?: boolean;
   }
 
   let {
@@ -15,10 +16,11 @@
     isTranslating1 = false,
     isTranslating2 = false,
     isLast = false,
+    showTranslation2 = true,
   }: Props = $props();
 </script>
 
-<div class="line grid grid-cols-3 text-3xl gap-8 p-4" class:last={isLast}>
+<div class="line grid gap-8 p-4" class:last={isLast} class:grid-cols-3={showTranslation2} class:grid-cols-2={!showTranslation2}>
   <div class="col flex justify-center text-center">{text}</div>
 
   <div class="col flex justify-center text-center">
@@ -34,18 +36,20 @@
     {/if}
   </div>
 
-  <div class="col flex justify-center text-center">
-    {#if isTranslating2}
-      <div class="secondary-text">
-        <span class="dot">·</span>
-        <span class="dot">·</span>
-        <span class="dot">·</span>
-      </div>
-    {/if}
-    {#if translation2}
-      <div class="secondary-text">{translation2}</div>
-    {/if}
-  </div>
+  {#if showTranslation2}
+    <div class="col flex justify-center text-center">
+      {#if isTranslating2}
+        <div class="secondary-text">
+          <span class="dot">·</span>
+          <span class="dot">·</span>
+          <span class="dot">·</span>
+        </div>
+      {/if}
+      {#if translation2}
+        <div class="secondary-text">{translation2}</div>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
