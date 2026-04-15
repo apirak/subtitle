@@ -2,16 +2,41 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, Notify};
 
+use base64::Engine;
 use tauri::Emitter;
 
 const MAX_RETRIES: u32 = 3;
 const REQUEST_TIMEOUT_SECS: u64 = 30;
 const SILENCE_THRESHOLD: f32 = 0.005;
 const MIN_SPEECH_RMS: f32 = 0.04;
+const MIN_SPEECH_RMS_GEMINI: f32 = 0.02;
 const MAX_CHUNK_SAMPLES: usize = 48_000;
 const SILENCE_WINDOW_SAMPLES: usize = 1024;
 const SILENCE_DURATION_MS: u64 = 300;
 const NO_AUDIO_TIMEOUT_SECS: u64 = 5;
+
+#[derive(Clone, Copy, Debug)]
+enum AsrProvider {
+    OpenAiCompatible,
+    GeminiBatch,
+}
+
+impl AsrProvider {
+    fn from_engine(engine: &str) -> Self {
+        if engine.eq_ignore_ascii_case("gemini") {
+            Self::GeminiBatch
+        } else {
+            Self::OpenAiCompatible
+        }
+    }
+}
+
+fn min_speech_rms_for_provider(provider: AsrProvider) -> f32 {
+    match provider {
+        AsrProvider::GeminiBatch => MIN_SPEECH_RMS_GEMINI,
+        AsrProvider::OpenAiCompatible => MIN_SPEECH_RMS,
+    }
+}
 
 #[derive(Clone, serde::Serialize)]
 pub struct RemoteAsrStatus {
@@ -133,6 +158,111 @@ fn encode_wav(samples: &[i16], sample_rate: u32) -> Vec<u8> {
 
 async fn send_transcription(
     client: &reqwest::Client,
+    provider: AsrProvider,
+    endpoint: &str,
+    api_key: &str,
+    audio_bytes: &[u8],
+    language: Option<&str>,
+    model: &str,
+) -> Result<String, String> {
+    match provider {
+        AsrProvider::OpenAiCompatible => {
+            send_openai_compatible_transcription(client, endpoint, api_key, audio_bytes, language, model).await
+        }
+        AsrProvider::GeminiBatch => {
+            send_gemini_batch_transcription(client, endpoint, api_key, audio_bytes, model).await
+        }
+    }
+}
+
+fn resolve_openai_transcription_url(endpoint: &str) -> String {
+    let endpoint = endpoint.trim_end_matches('/').to_string();
+
+    if endpoint.ends_with("/v1/audio/transcriptions") || endpoint.contains("/v1/inference/") {
+        endpoint
+    } else if endpoint.ends_with("/v1") {
+        format!("{}/audio/transcriptions", endpoint)
+    } else {
+        format!("{}/v1/audio/transcriptions", endpoint)
+    }
+}
+
+fn resolve_gemini_generate_content_url(endpoint: &str, model: &str, api_key: &str) -> String {
+    let raw_endpoint = endpoint.trim().trim_end_matches('/');
+    let base = match reqwest::Url::parse(raw_endpoint) {
+        Ok(parsed) => {
+            let path = parsed.path();
+            let mut version_path = path.to_string();
+            if let Some(pos) = path.to_ascii_lowercase().find("/v1") {
+                let mut end = pos + 3; // include /v1
+                for ch in path[end..].chars() {
+                    if ch.is_ascii_alphanumeric() {
+                        end += ch.len_utf8();
+                    } else {
+                        break;
+                    }
+                }
+                version_path = path[..end].to_string();
+            }
+
+            let mut normalized = format!("{}{}", parsed.origin().ascii_serialization(), version_path);
+            normalized = normalized.trim_end_matches('/').to_string();
+            if normalized.is_empty() {
+                raw_endpoint.to_string()
+            } else {
+                normalized
+            }
+        }
+        Err(_) => raw_endpoint.to_string(),
+    };
+
+    format!("{}/models/{}:generateContent?key={}", base, model, api_key)
+}
+
+fn redact_gemini_url_for_log(url: &str) -> String {
+    if let Some((prefix, _)) = url.split_once("?key=") {
+        format!("{}?key=<redacted>", prefix)
+    } else {
+        url.to_string()
+    }
+}
+
+fn truncate_for_log(input: &str, max_chars: usize) -> String {
+    if input.chars().count() <= max_chars {
+        return input.to_string();
+    }
+
+    let mut out = String::new();
+    for (idx, ch) in input.chars().enumerate() {
+        if idx >= max_chars {
+            break;
+        }
+        out.push(ch);
+    }
+    out.push_str("...(truncated)");
+    out
+}
+
+fn extract_gemini_text(body_json: &serde_json::Value) -> String {
+    body_json
+        .get("candidates")
+        .and_then(|c| c.as_array())
+        .and_then(|c| c.first())
+        .and_then(|c| c.get("content"))
+        .and_then(|c| c.get("parts"))
+        .and_then(|p| p.as_array())
+        .map(|parts| {
+            parts
+                .iter()
+                .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .unwrap_or_default()
+}
+
+async fn send_openai_compatible_transcription(
+    client: &reqwest::Client,
     endpoint: &str,
     api_key: &str,
     audio_bytes: &[u8],
@@ -140,7 +270,7 @@ async fn send_transcription(
     model: &str,
 ) -> Result<String, String> {
     log::info!(
-        "send_transcription: audio_bytes={} bytes, language={:?}",
+        "send_openai_compatible_transcription: audio_bytes={} bytes, language={:?}",
         audio_bytes.len(),
         language
     );
@@ -159,16 +289,8 @@ async fn send_transcription(
         form = form.text("language", whisper_lang);
     }
 
-    let endpoint = endpoint.trim_end_matches('/').to_string();
-    let url =
-        if endpoint.ends_with("/v1/audio/transcriptions") || endpoint.contains("/v1/inference/") {
-            endpoint
-        } else if endpoint.ends_with("/v1") {
-            format!("{}/audio/transcriptions", endpoint)
-        } else {
-            format!("{}/v1/audio/transcriptions", endpoint)
-        };
-    log::info!("send_transcription: POST {}", url);
+    let url = resolve_openai_transcription_url(endpoint);
+    log::info!("send_openai_compatible_transcription: POST {}", url);
 
     let resp = client
         .post(&url)
@@ -180,7 +302,7 @@ async fn send_transcription(
         .map_err(|e| format!("HTTP request failed: {}", e))?;
 
     let status = resp.status();
-    log::info!("send_transcription: response status={}", status);
+    log::info!("send_openai_compatible_transcription: response status={}", status);
 
     if status == 401 {
         return Err("Invalid API key".to_string());
@@ -190,7 +312,7 @@ async fn send_transcription(
             if let Ok(delay_str) = retry_after.to_str() {
                 if let Ok(delay_secs) = delay_str.parse::<u64>() {
                     log::warn!(
-                        "send_transcription: rate limited, retrying after {}s",
+                        "send_openai_compatible_transcription: rate limited, retrying after {}s",
                         delay_secs
                     );
                     tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)).await;
@@ -200,7 +322,7 @@ async fn send_transcription(
     }
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        log::error!("send_transcription: API error {}: {}", status, body);
+        log::error!("send_openai_compatible_transcription: API error {}: {}", status, body);
         return Err(format!("API error {}: {}", status, body));
     }
 
@@ -224,7 +346,10 @@ async fn send_transcription(
         .text()
         .await
         .map_err(|e| format!("read body failed: {}", e))?;
-    log::info!("send_transcription: raw response body: {}", body_text);
+    log::info!(
+        "send_openai_compatible_transcription: raw response body: {}",
+        body_text
+    );
     let transcription: TranscriptionResponse = serde_json::from_str(&body_text)
         .map_err(|e| format!("JSON parse failed: {} (body: {})", e, body_text))?;
 
@@ -234,15 +359,112 @@ async fn send_transcription(
         .map(|s| s.avg_logprob)
         .fold(f32::NEG_INFINITY, f32::max);
     if avg_confidence < MIN_AVG_LOGPROB {
-        log::info!("send_transcription: discarding low-confidence result (avg_logprob={:.4}, threshold={})", avg_confidence, MIN_AVG_LOGPROB);
+        log::info!(
+            "send_openai_compatible_transcription: discarding low-confidence result (avg_logprob={:.4}, threshold={})",
+            avg_confidence,
+            MIN_AVG_LOGPROB
+        );
         return Ok(String::new());
     }
 
     Ok(transcription.text)
 }
 
+async fn send_gemini_batch_transcription(
+    client: &reqwest::Client,
+    endpoint: &str,
+    api_key: &str,
+    audio_bytes: &[u8],
+    model: &str,
+) -> Result<String, String> {
+    let url = resolve_gemini_generate_content_url(endpoint, model, api_key);
+    let loggable_url = redact_gemini_url_for_log(&url);
+    log::info!(
+        "send_gemini_batch_transcription: POST {} (audio={} bytes, model={})",
+        loggable_url,
+        audio_bytes.len()
+        ,model
+    );
+
+    let audio_base64 = base64::engine::general_purpose::STANDARD.encode(audio_bytes);
+
+    let payload = serde_json::json!({
+        "contents": [{
+            "parts": [
+                { "inlineData": { "mimeType": "audio/wav", "data": audio_base64 } },
+                { "text": "Transcribe this audio. Return only the transcribed text." }
+            ]
+        }],
+        "generationConfig": {
+            "temperature": 0
+        }
+    });
+
+    let resp = client
+        .post(&url)
+        .json(&payload)
+        .timeout(tokio::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    let status = resp.status();
+    log::info!(
+        "send_gemini_batch_transcription: response status={} from {}",
+        status,
+        loggable_url
+    );
+    if status == 401 || status == 403 {
+        return Err("Invalid API key".to_string());
+    }
+
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        log::error!("send_gemini_batch_transcription: API error {}: {}", status, body);
+        return Err(format!("API error {}: {}", status, body));
+    }
+
+    let body_text = resp
+        .text()
+        .await
+        .map_err(|e| format!("read body failed: {}", e))?;
+    log::debug!(
+        "send_gemini_batch_transcription: raw response body={} ",
+        truncate_for_log(&body_text, 2000)
+    );
+    let body_json: serde_json::Value = serde_json::from_str(&body_text)
+        .map_err(|e| format!("JSON parse failed: {} (body: {})", e, body_text))?;
+
+    let text = extract_gemini_text(&body_json);
+
+    if text.trim().is_empty() {
+        log::warn!(
+            "send_gemini_batch_transcription: extracted empty text; candidate_count={} finish_reason={:?}",
+            body_json
+                .get("candidates")
+                .and_then(|c| c.as_array())
+                .map(|c| c.len())
+                .unwrap_or(0),
+            body_json
+                .get("candidates")
+                .and_then(|c| c.as_array())
+                .and_then(|c| c.first())
+                .and_then(|c| c.get("finishReason"))
+                .and_then(|f| f.as_str())
+        );
+    } else {
+        log::info!(
+            "send_gemini_batch_transcription: extracted text ({} chars)",
+            text.trim().chars().count()
+        );
+    }
+
+    Ok(text.trim().to_string())
+}
+
 async fn transcribe_with_retry(
     client: &reqwest::Client,
+    provider: AsrProvider,
     endpoint: &str,
     api_key: &str,
     audio_bytes: &[u8],
@@ -251,11 +473,13 @@ async fn transcribe_with_retry(
 ) -> Result<String, String> {
     for attempt in 0..MAX_RETRIES {
         log::info!(
-            "transcribe_with_retry: attempt {}/{}",
+            "transcribe_with_retry: attempt {}/{} provider={:?} model={}",
             attempt + 1,
-            MAX_RETRIES
+            MAX_RETRIES,
+            provider,
+            model
         );
-        match send_transcription(client, endpoint, api_key, audio_bytes, language, model).await {
+        match send_transcription(client, provider, endpoint, api_key, audio_bytes, language, model).await {
             Ok(text) => {
                 log::info!("transcribe_with_retry: got text ({}) chars", text.len());
                 return Ok(text);
@@ -306,6 +530,7 @@ pub async fn remote_asr_start(
     api_key: String,
     source_lang: String,
     model: String,
+    engine: String,
 ) -> Result<(), String> {
     // If already running, stop first
     if state.is_running() {
@@ -313,20 +538,37 @@ pub async fn remote_asr_start(
     }
 
     log::info!(
-        "remote_asr_start: spawning task, endpoint={}, lang={}, api_key_len={}",
+        "remote_asr_start: spawning task, endpoint={}, lang={}, api_key_len={}, engine={}",
         endpoint,
         source_lang,
-        api_key.len()
+        api_key.len(),
+        engine
     );
 
     state.set_running(true);
     state.reset().await;
 
     let client = reqwest::Client::new();
+    let provider = AsrProvider::from_engine(&engine);
+    let min_speech_rms = min_speech_rms_for_provider(provider);
     let language = Some(source_lang);
-    let model = if model.trim().is_empty() { "whisper-1".to_string() } else { model };
+    let model = if model.trim().is_empty() {
+        match provider {
+            AsrProvider::GeminiBatch => "gemini-2.0-flash".to_string(),
+            AsrProvider::OpenAiCompatible => "whisper-1".to_string(),
+        }
+    } else {
+        model
+    };
     let stop_signal = state.stop_signal();
     let mut chunk_count: u64 = 0;
+
+    log::info!(
+        "remote_asr_start: provider={:?}, model={}, min_speech_rms={:.4}",
+        provider,
+        model,
+        min_speech_rms
+    );
 
     tauri::async_runtime::spawn(async move {
         let mut buffer: Vec<f32> = Vec::with_capacity(SILENCE_WINDOW_SAMPLES);
@@ -390,8 +632,8 @@ pub async fn remote_asr_start(
                         buffer_rms
                     );
 
-                    if buffer_rms < MIN_SPEECH_RMS {
-                        log::info!("Remote ASR: skipping transcription, buffer rms={:.4} below threshold {:.4}", buffer_rms, MIN_SPEECH_RMS);
+                    if buffer_rms < min_speech_rms {
+                        log::info!("Remote ASR: skipping transcription, buffer rms={:.4} below threshold {:.4}", buffer_rms, min_speech_rms);
                         buffer.clear();
                         silence_start = None;
                         continue;
@@ -404,6 +646,7 @@ pub async fn remote_asr_start(
                     let audio_wav = encode_wav(&i16_samples, 16000);
                     let text = match transcribe_with_retry(
                         &client,
+                        provider,
                         &endpoint,
                         &api_key,
                         &audio_wav,
@@ -473,8 +716,8 @@ pub async fn remote_asr_start(
                         log::info!("Remote ASR: silence detected (window rms={:.4}), flushing {} samples ({}ms), buffer rms={:.4}", rms, flush_len, flush_len * 1000 / 16000, send_rms);
                         silence_start = None;
 
-                        if send_rms < MIN_SPEECH_RMS {
-                            log::info!("Remote ASR: skipping silence flush, buffer rms={:.4} below threshold {:.4}", send_rms, MIN_SPEECH_RMS);
+                        if send_rms < min_speech_rms {
+                            log::info!("Remote ASR: skipping silence flush, buffer rms={:.4} below threshold {:.4}", send_rms, min_speech_rms);
                             continue;
                         }
 
@@ -482,6 +725,7 @@ pub async fn remote_asr_start(
                         let audio_wav = encode_wav(&i16_samples, 16000);
                         let text = match transcribe_with_retry(
                             &client,
+                            provider,
                             &endpoint,
                             &api_key,
                             &audio_wav,
@@ -533,7 +777,7 @@ pub async fn remote_asr_start(
         // Flush remaining buffer on exit
         if !buffer.is_empty() {
             let exit_rms = compute_rms(&buffer);
-            if exit_rms < MIN_SPEECH_RMS {
+            if exit_rms < min_speech_rms {
                 log::info!("Remote ASR: discarding {} remaining samples on exit, rms={:.4} below threshold", buffer.len(), exit_rms);
             } else {
                 log::info!(
@@ -545,6 +789,7 @@ pub async fn remote_asr_start(
                 let audio_wav = encode_wav(&i16_samples, 16000);
                 match transcribe_with_retry(
                     &client,
+                    provider,
                     &endpoint,
                     &api_key,
                     &audio_wav,
@@ -743,6 +988,7 @@ mod tests {
     fn test_silence_threshold_constant() {
         assert_eq!(SILENCE_THRESHOLD, 0.005);
         assert_eq!(MIN_SPEECH_RMS, 0.04);
+        assert_eq!(MIN_SPEECH_RMS_GEMINI, 0.02);
     }
 
     #[test]
@@ -913,5 +1159,83 @@ mod tests {
             .map(|s| s.avg_logprob)
             .fold(f32::NEG_INFINITY, f32::max);
         assert!(max_logprob >= -0.8, "boundary logprob should pass");
+    }
+
+    #[test]
+    fn test_provider_from_engine() {
+        assert!(matches!(
+            AsrProvider::from_engine("gemini"),
+            AsrProvider::GeminiBatch
+        ));
+        assert!(matches!(
+            AsrProvider::from_engine("GEMINI"),
+            AsrProvider::GeminiBatch
+        ));
+        assert!(matches!(
+            AsrProvider::from_engine("remote"),
+            AsrProvider::OpenAiCompatible
+        ));
+    }
+
+    #[test]
+    fn test_resolve_gemini_generate_content_url_from_v1beta_openai_path() {
+        let url = resolve_gemini_generate_content_url(
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+            "gemini-2.0-flash",
+            "AIza-test",
+        );
+        assert_eq!(
+            url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIza-test"
+        );
+    }
+
+    #[test]
+    fn test_resolve_gemini_generate_content_url_from_v1beta_base() {
+        let url = resolve_gemini_generate_content_url(
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-2.0-flash",
+            "AIza-test",
+        );
+        assert_eq!(
+            url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIza-test"
+        );
+    }
+
+    #[test]
+    fn test_resolve_gemini_generate_content_url_from_bare_host() {
+        let url = resolve_gemini_generate_content_url(
+            "https://generativelanguage.googleapis.com",
+            "gemini-2.0-flash",
+            "AIza-test",
+        );
+        assert_eq!(
+            url,
+            "https://generativelanguage.googleapis.com/models/gemini-2.0-flash:generateContent?key=AIza-test"
+        );
+    }
+
+    #[test]
+    fn test_extract_gemini_text_from_candidate_parts() {
+        let body = serde_json::json!({
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            { "text": "hello" },
+                            { "text": "world" }
+                        ]
+                    }
+                }
+            ]
+        });
+        assert_eq!(extract_gemini_text(&body), "hello world");
+    }
+
+    #[test]
+    fn test_extract_gemini_text_handles_missing_candidates() {
+        let body = serde_json::json!({ "candidates": [] });
+        assert_eq!(extract_gemini_text(&body), "");
     }
 }

@@ -612,6 +612,7 @@ mod tests {
             translation_model: Some("gpt-4o-mini".to_string()),
             translation_api_key_name: Some("translation".to_string()),
             remote_endpoint: Some("https://api.openai.com".to_string()),
+            remote_model: Some("whisper-1".to_string()),
             remote_api_key_name: Some("openai".to_string()),
         };
 
@@ -636,6 +637,7 @@ mod tests {
             settings.translation_api_key_name
         );
         assert_eq!(deserialized.remote_endpoint, settings.remote_endpoint);
+        assert_eq!(deserialized.remote_model, settings.remote_model);
         assert_eq!(
             deserialized.remote_api_key_name,
             settings.remote_api_key_name
@@ -658,6 +660,7 @@ mod tests {
             translation_model: None,
             translation_api_key_name: None,
             remote_endpoint: None,
+            remote_model: None,
             remote_api_key_name: None,
         };
 

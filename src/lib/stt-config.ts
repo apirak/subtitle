@@ -3,7 +3,7 @@
  * Team: STT develops independently here.
  */
 
-export type STTEngine = "browser" | "vosk" | "remote";
+export type STTEngine = "browser" | "vosk" | "remote" | "gemini";
 
 export interface STTConfig {
 	engine: STTEngine;
@@ -20,7 +20,7 @@ export function validateSTTConfig(config: STTConfig): { valid: boolean; error?: 
 		return { valid: false, error: "STT engine not selected" };
 	}
 
-	if (config.engine === "remote") {
+	if (config.engine === "remote" || config.engine === "gemini") {
 		if (!config.remoteEndpoint?.trim()) {
 			return { valid: false, error: "Remote endpoint not configured" };
 		}
@@ -40,6 +40,7 @@ export function getSTTEngineLabel(engine: STTEngine): string {
 		browser: "Browser (Web Speech API)",
 		vosk: "Vosk (On-device)",
 		remote: "Remote (OpenAI-compatible)",
+		gemini: "Gemini (Batch API)",
 	};
 	return labels[engine];
 }

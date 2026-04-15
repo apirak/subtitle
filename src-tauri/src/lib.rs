@@ -55,6 +55,7 @@ async fn remote_asr_start(
         api_key,
         settings.source_lang,
         settings.remote_model.unwrap_or_default(),
+        settings.engine,
     )
     .await
 }

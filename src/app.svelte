@@ -88,6 +88,7 @@
 				targetLang2 = settings.target_lang_2 || "none";
 				remoteEndpoint = settings.remote_endpoint ?? "";
 				remoteModel = settings.remote_model ?? "";
+				speech.remoteEndpoint = remoteEndpoint;
 				translationEngine = settings.translation_engine;
 				translationEndpoint = settings.translation_endpoint ?? "";
 				translationModel = settings.translation_model ?? "";
@@ -213,6 +214,7 @@
 
 	function handleRemoteEndpointChange(nextEndpoint: string) {
 		remoteEndpoint = nextEndpoint;
+		speech.remoteEndpoint = nextEndpoint;
 		speech.saveSetting("remote_endpoint", nextEndpoint).catch(console.error);
 	}
 

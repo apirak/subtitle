@@ -60,6 +60,7 @@ class Speech {
 
 	private _subtitleUnlisten: (() => void) | null = null;
 	private _errorUnlisten: (() => void) | null = null;
+	private _statusPollInterval: ReturnType<typeof setInterval> | null = null;
 
 	private unlistenUpdate?: UnlistenFn;
 	private unlistenFinal?: UnlistenFn;
@@ -122,7 +123,7 @@ class Speech {
 		});
 	};
 
-	setTranslation = (_id: string, _original: string, translated: string) => {
+	setTranslation = (_id: string, _original: string, _translated: string) => {
 		// Translation storage is managed by app.svelte
 		// This listener exists for future direct backend translation integration
 	};
@@ -133,14 +134,48 @@ class Speech {
 	};
 
 	destroy = () => {
+		this.stopStatusPolling();
 		this.unlistenUpdate?.();
 		this.unlistenFinal?.();
 		this.unlistenTranslated?.();
 		this.unlistenError?.();
 	};
 
+	private startStatusPolling = () => {
+		this.stopStatusPolling();
+		this._statusPollInterval = setInterval(async () => {
+			if (this.engine !== "remote" && this.engine !== "gemini") return;
+			if (this.status !== "listening") return;
+
+			try {
+				const status = await invoke<{
+					is_running: boolean;
+					chunks_accumulated: number;
+					last_transcript: string | null;
+					error: string | null;
+				}>("remote_asr_status");
+
+				console.log("[RemoteASR] status:", {
+					is_running: status.is_running,
+					chunks_accumulated: status.chunks_accumulated,
+					has_last_transcript: Boolean(status.last_transcript),
+					error: status.error,
+				});
+			} catch (err) {
+				console.error("[RemoteASR] status poll failed:", err);
+			}
+		}, 2000);
+	};
+
+	private stopStatusPolling = () => {
+		if (this._statusPollInterval) {
+			clearInterval(this._statusPollInterval);
+			this._statusPollInterval = null;
+		}
+	};
+
 	startCapture = async (): Promise<{ sample_rate: number; channels: number }> => {
-		if (this.engine === "remote") {
+		if (this.engine === "remote" || this.engine === "gemini") {
 			try {
 				const result = await invoke<{ sample_rate: number; channels: number }>("audio_capture_start");
 				return result;
@@ -171,7 +206,7 @@ class Speech {
 	};
 
 	stopCapture = async (): Promise<void> => {
-		if (this.engine === "remote") {
+		if (this.engine === "remote" || this.engine === "gemini") {
 			try {
 				await invoke("remote_asr_stop");
 			} catch (err) {
@@ -196,7 +231,7 @@ class Speech {
 	};
 
 	start = async () => {
-		if (this.engine === "remote") {
+		if (this.engine === "remote" || this.engine === "gemini") {
 			console.log(
 				"[RemoteASR] start called, apiKey length:",
 				this.apiKey?.length ?? 0,
@@ -243,6 +278,7 @@ class Speech {
 			this.subtitles = [];
 			this.errorMessage = "";
 			this.status = "listening";
+			this.startStatusPolling();
 			return;
 		}
 
@@ -376,6 +412,8 @@ class Speech {
 			this._errorUnlisten();
 			this._errorUnlisten = null;
 		}
+
+		this.stopStatusPolling();
 
 		await this.stopCapture();
 
