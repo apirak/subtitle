@@ -70,6 +70,7 @@ pub struct Settings {
     pub translation_model: Option<String>,
     pub translation_api_key_name: Option<String>,
     pub remote_endpoint: Option<String>,
+    pub remote_model: Option<String>,
     pub remote_api_key_name: Option<String>,
 }
 
@@ -262,6 +263,10 @@ pub async fn settings_get(app: tauri::AppHandle) -> Result<Settings, String> {
         Some(v) => v.as_str().map(String::from),
         None => None,
     };
+    let remote_model = match store.get("remote_model") {
+        Some(v) => v.as_str().map(String::from),
+        None => None,
+    };
     let remote_api_key_name = match store.get("remote_api_key_name") {
         Some(v) => v.as_str().map(String::from),
         None => None,
@@ -281,6 +286,7 @@ pub async fn settings_get(app: tauri::AppHandle) -> Result<Settings, String> {
         translation_model,
         translation_api_key_name,
         remote_endpoint,
+        remote_model,
         remote_api_key_name,
     })
 }
@@ -300,6 +306,7 @@ pub async fn settings_set(app: tauri::AppHandle, key: String, value: String) -> 
         | "translation_model"
         | "translation_api_key_name"
         | "remote_endpoint"
+        | "remote_model"
         | "remote_api_key_name"
         | "translation_engine"
         | "source_language" => {

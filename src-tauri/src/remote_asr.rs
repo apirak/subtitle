@@ -137,6 +137,7 @@ async fn send_transcription(
     api_key: &str,
     audio_bytes: &[u8],
     language: Option<&str>,
+    model: &str,
 ) -> Result<String, String> {
     log::info!(
         "send_transcription: audio_bytes={} bytes, language={:?}",
@@ -151,7 +152,7 @@ async fn send_transcription(
 
     let mut form = reqwest::multipart::Form::new()
         .part("audio", audio_part)
-        .text("model", "whisper-1");
+        .text("model", model.to_string());
 
     if let Some(lang) = language {
         let whisper_lang = lang.split('-').next().unwrap_or(lang).to_string();
@@ -246,6 +247,7 @@ async fn transcribe_with_retry(
     api_key: &str,
     audio_bytes: &[u8],
     language: Option<&str>,
+    model: &str,
 ) -> Result<String, String> {
     for attempt in 0..MAX_RETRIES {
         log::info!(
@@ -253,7 +255,7 @@ async fn transcribe_with_retry(
             attempt + 1,
             MAX_RETRIES
         );
-        match send_transcription(client, endpoint, api_key, audio_bytes, language).await {
+        match send_transcription(client, endpoint, api_key, audio_bytes, language, model).await {
             Ok(text) => {
                 log::info!("transcribe_with_retry: got text ({}) chars", text.len());
                 return Ok(text);
@@ -303,6 +305,7 @@ pub async fn remote_asr_start(
     endpoint: String,
     api_key: String,
     source_lang: String,
+    model: String,
 ) -> Result<(), String> {
     // If already running, stop first
     if state.is_running() {
@@ -321,6 +324,7 @@ pub async fn remote_asr_start(
 
     let client = reqwest::Client::new();
     let language = Some(source_lang);
+    let model = if model.trim().is_empty() { "whisper-1".to_string() } else { model };
     let stop_signal = state.stop_signal();
     let mut chunk_count: u64 = 0;
 
@@ -404,6 +408,7 @@ pub async fn remote_asr_start(
                         &api_key,
                         &audio_wav,
                         language.as_deref(),
+                        &model,
                     )
                     .await
                     {
@@ -481,6 +486,7 @@ pub async fn remote_asr_start(
                             &api_key,
                             &audio_wav,
                             language.as_deref(),
+                            &model,
                         )
                         .await
                         {
@@ -543,6 +549,7 @@ pub async fn remote_asr_start(
                     &api_key,
                     &audio_wav,
                     language.as_deref(),
+                    &model,
                 )
                 .await
                 {

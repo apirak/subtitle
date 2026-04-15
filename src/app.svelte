@@ -27,6 +27,7 @@
 	let settingsSection = $state<SettingsSection>("theme");
 	let selectedEngine = $state<"browser" | "vosk" | "remote">("browser");
 	let remoteEndpoint = $state("");
+	let remoteModel = $state("");
 	let modelPath = $state("");
 	let apiKey = $state("");
 	let translationEngine = $state("remote");
@@ -76,6 +77,7 @@
 					translation_model: string | null;
 					translation_api_key_name: string | null;
 					remote_endpoint: string | null;
+					remote_model: string | null;
 					remote_api_key_name: string | null;
 				}>("settings_get");
 				selectedEngine = settings.engine as "browser" | "vosk" | "remote";
@@ -85,6 +87,7 @@
 				targetLang = settings.target_lang;
 				targetLang2 = settings.target_lang_2 || "none";
 				remoteEndpoint = settings.remote_endpoint ?? "";
+				remoteModel = settings.remote_model ?? "";
 				translationEngine = settings.translation_engine;
 				translationEndpoint = settings.translation_endpoint ?? "";
 				translationModel = settings.translation_model ?? "";
@@ -213,6 +216,11 @@
 		speech.saveSetting("remote_endpoint", nextEndpoint).catch(console.error);
 	}
 
+	function handleRemoteModelChange(nextModel: string) {
+		remoteModel = nextModel;
+		speech.saveSetting("remote_model", nextModel).catch(console.error);
+	}
+
 	function handleApiKeyChange(nextApiKey: string) {
 		apiKey = nextApiKey;
 		speech.apiKey = nextApiKey;
@@ -334,6 +342,7 @@
 		{targetLang2}
 		engine={speech.engine}
 		{remoteEndpoint}
+		remoteModel={remoteModel}
 		{apiKey}
 		{translationEngine}
 		{translationEndpoint}
@@ -348,6 +357,7 @@
 		onTargetLang2Change={handleTargetLanguage2Change}
 		onEngineChange={handleEngineChange}
 		onRemoteEndpointChange={handleRemoteEndpointChange}
+		onRemoteModelChange={handleRemoteModelChange}
 		onApiKeyChange={handleApiKeyChange}
 		onTranslationEngineChange={handleTranslationEngineChange}
 		onTranslationEndpointChange={handleTranslationEndpointChange}

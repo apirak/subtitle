@@ -8,10 +8,12 @@
 		asrEngineOptions: AsrEngineOption[];
 		currentEngine: "browser" | "vosk" | "remote";
 		currentRemoteEndpoint: string;
+		currentRemoteModel: string;
 		currentApiKey: string;
 		remoteApiKeyHint: string;
 		onEngineChange: (engine: "browser" | "vosk" | "remote") => void;
 		onRemoteEndpointChange: (value: string) => void;
+		onRemoteModelChange: (value: string) => void;
 		onApiKeyChange: (value: string) => void;
 	}
 
@@ -19,10 +21,12 @@
 		asrEngineOptions,
 		currentEngine,
 		currentRemoteEndpoint,
+		currentRemoteModel,
 		currentApiKey,
 		remoteApiKeyHint,
 		onEngineChange,
 		onRemoteEndpointChange,
+		onRemoteModelChange,
 		onApiKeyChange,
 	}: Props = $props();
 </script>
@@ -69,6 +73,18 @@
 				placeholder="https://api.example.com/v1/audio/transcriptions"
 				value={currentRemoteEndpoint}
 				oninput={(event) => onRemoteEndpointChange((event.target as HTMLInputElement).value)}
+			/>
+		</div>
+
+		<div class="mb-5">
+			<label class="settings-field-label" for="split-remote-model">Model</label>
+			<input
+				id="split-remote-model"
+				type="text"
+				class="settings-input"
+				placeholder="whisper-1"
+				value={currentRemoteModel}
+				oninput={(event) => onRemoteModelChange((event.target as HTMLInputElement).value)}
 			/>
 		</div>
 

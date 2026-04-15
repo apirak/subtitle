@@ -25,6 +25,7 @@
 		targetLang2: string;
 		engine: "browser" | "vosk" | "remote";
 		remoteEndpoint: string;
+		remoteModel: string;
 		apiKey: string;
 		translationEngine: string;
 		translationEndpoint: string;
@@ -36,6 +37,7 @@
 		onTargetLang2Change: (language: string) => void;
 		onEngineChange: (engine: "browser" | "vosk" | "remote") => void;
 		onRemoteEndpointChange: (value: string) => void;
+		onRemoteModelChange: (value: string) => void;
 		onApiKeyChange: (value: string) => void;
 		onTranslationEngineChange: (engine: string) => void;
 		onTranslationEndpointChange: (value: string) => void;
@@ -54,6 +56,7 @@
 		targetLang2,
 		engine,
 		remoteEndpoint,
+		remoteModel,
 		apiKey,
 		translationEngine,
 		translationEndpoint,
@@ -65,6 +68,7 @@
 		onTargetLang2Change,
 		onEngineChange,
 		onRemoteEndpointChange,
+		onRemoteModelChange,
 		onApiKeyChange,
 		onTranslationEngineChange,
 		onTranslationEndpointChange,
@@ -80,6 +84,7 @@
 	let currentTargetLang2 = $state("none");
 	let currentEngine = $state<"browser" | "vosk" | "remote">("browser");
 	let currentRemoteEndpoint = $state("");
+	let currentRemoteModel = $state("");
 	let currentApiKey = $state("");
 	let currentTranslationEngine = $state("remote");
 	let currentTranslationEndpoint = $state("");
@@ -147,6 +152,10 @@
 	});
 
 	$effect(() => {
+		currentRemoteModel = remoteModel;
+	});
+
+	$effect(() => {
 		currentApiKey = apiKey;
 	});
 
@@ -209,6 +218,11 @@
 	function handleRemoteEndpointChange(nextValue: string) {
 		currentRemoteEndpoint = nextValue;
 		onRemoteEndpointChange(nextValue);
+	}
+
+	function handleRemoteModelChange(nextValue: string) {
+		currentRemoteModel = nextValue;
+		onRemoteModelChange(nextValue);
 	}
 
 	function handleApiKeyChange(nextValue: string) {
@@ -329,10 +343,12 @@
 						asrEngineOptions={asrEngineOptions}
 						currentEngine={currentEngine}
 						currentRemoteEndpoint={currentRemoteEndpoint}
-						currentApiKey={currentApiKey}
-						remoteApiKeyHint={remoteApiKeyHint}
-						onEngineChange={handleEngineChange}
-						onRemoteEndpointChange={handleRemoteEndpointChange}
+				currentRemoteModel={currentRemoteModel}
+				currentApiKey={currentApiKey}
+				remoteApiKeyHint={remoteApiKeyHint}
+				onEngineChange={handleEngineChange}
+				onRemoteEndpointChange={handleRemoteEndpointChange}
+				onRemoteModelChange={handleRemoteModelChange}
 						onApiKeyChange={handleApiKeyChange}
 					/>
 				{:else if currentSection === "translate"}
