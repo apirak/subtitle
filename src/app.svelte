@@ -25,7 +25,7 @@
 	let translations2 = $state<Record<string, string>>({});
 	let settingsSplitOpen = $state(false);
 	let settingsSection = $state<SettingsSection>("theme");
-	let selectedEngine = $state<"browser" | "vosk" | "remote">("browser");
+	let selectedEngine = $state<"browser" | "vosk" | "remote" | "gemini">("browser");
 	let remoteEndpoint = $state("");
 	let remoteModel = $state("");
 	let modelPath = $state("");
@@ -80,9 +80,9 @@
 					remote_model: string | null;
 					remote_api_key_name: string | null;
 				}>("settings_get");
-				selectedEngine = settings.engine as "browser" | "vosk" | "remote";
+				selectedEngine = settings.engine as "browser" | "vosk" | "remote" | "gemini";
 				theme = settings.theme === "day" || settings.theme === "toy" ? settings.theme : "night";
-				speech.engine = settings.engine as "browser" | "vosk" | "remote";
+				speech.engine = settings.engine as "browser" | "vosk" | "remote" | "gemini";
 				speech.language = settings.source_lang;
 				targetLang = settings.target_lang;
 				targetLang2 = settings.target_lang_2 || "none";
@@ -205,7 +205,7 @@
 		speech.saveSetting("target_lang_2", nextLanguage).catch(console.error);
 	}
 
-	function handleEngineChange(nextEngine: "browser" | "vosk" | "remote") {
+	function handleEngineChange(nextEngine: "browser" | "vosk" | "remote" | "gemini") {
 		selectedEngine = nextEngine;
 		speech.setEngine(nextEngine);
 		speech.saveSetting("engine", nextEngine).catch(console.error);
@@ -314,7 +314,7 @@
 			onStart={handleStart}
 			onSettings={() => (settingsSplitOpen = true)}
 			{isLoadingApiKeys}
-			requiresRemoteApiKey={selectedEngine === "remote" && !apiKey}
+			requiresRemoteApiKey={(selectedEngine === "remote" || selectedEngine === "gemini") && !apiKey}
 		/>
 	{:else if speech.status === "listening"}
 		<ListeningScreen

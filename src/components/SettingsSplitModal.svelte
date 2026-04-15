@@ -23,7 +23,7 @@
 		language: string;
 		targetLang: string;
 		targetLang2: string;
-		engine: "browser" | "vosk" | "remote";
+		engine: "browser" | "vosk" | "remote" | "gemini";
 		remoteEndpoint: string;
 		remoteModel: string;
 		apiKey: string;
@@ -35,7 +35,7 @@
 		onLanguageChange: (language: string) => void;
 		onTargetLangChange: (language: string) => void;
 		onTargetLang2Change: (language: string) => void;
-		onEngineChange: (engine: "browser" | "vosk" | "remote") => void;
+		onEngineChange: (engine: "browser" | "vosk" | "remote" | "gemini") => void;
 		onRemoteEndpointChange: (value: string) => void;
 		onRemoteModelChange: (value: string) => void;
 		onApiKeyChange: (value: string) => void;
@@ -82,7 +82,7 @@
 	let currentLanguage = $state("");
 	let currentTargetLang = $state("");
 	let currentTargetLang2 = $state("none");
-	let currentEngine = $state<"browser" | "vosk" | "remote">("browser");
+	let currentEngine = $state<"browser" | "vosk" | "remote" | "gemini">("browser");
 	let currentRemoteEndpoint = $state("");
 	let currentRemoteModel = $state("");
 	let currentApiKey = $state("");
@@ -95,6 +95,10 @@
 	let testTranslateResult = $state("");
 	let testTranslateSourceText = $state("");
 	let testTranslateResolvedUrl = $state("");
+	let isTestingStt = $state(false);
+	let testSttError = $state("");
+	let testSttResult = $state("");
+	let testSttResolvedUrl = $state("");
 
 	const menuItems: Array<{ key: SettingsSection; label: string }> = [
 		{ key: "theme", label: "Theme" },
@@ -113,10 +117,11 @@
 	const sourceOptions = SOURCE_LANGUAGES.map((item) => ({ value: item.code, label: item.label }));
 	const targetOptions = TARGET_LANGUAGES.map((item) => ({ value: item.value, label: item.label }));
 	const targetOptionsWithNone = [{ value: "none", label: "None" }, ...targetOptions];
-	const asrEngineOptions: Array<{ value: "browser" | "vosk" | "remote"; label: string }> = [
+	const asrEngineOptions: Array<{ value: "browser" | "vosk" | "remote" | "gemini"; label: string }> = [
 		{ value: "browser", label: "Browser (Web Speech API)" },
 		{ value: "vosk", label: "Vosk (On-device)" },
-		{ value: "remote", label: "Remote (API)" },
+		{ value: "remote", label: "Open AI compatible" },
+		{ value: "gemini", label: "Gemini" },
 	];
 	const translationEngineOptions = [
 		{ value: "none", label: "None" },
@@ -210,7 +215,7 @@
 		onTargetLang2Change(nextLanguage);
 	}
 
-	function handleEngineChange(nextEngine: "browser" | "vosk" | "remote") {
+	function handleEngineChange(nextEngine: "browser" | "vosk" | "remote" | "gemini") {
 		currentEngine = nextEngine;
 		onEngineChange(nextEngine);
 	}
@@ -248,6 +253,98 @@
 	function handleTranslationApiKeyChange(nextValue: string) {
 		currentTranslationApiKey = nextValue;
 		onTranslationApiKeyChange(nextValue);
+	}
+
+	function resolveAsrEndpoint(endpoint: string): string {
+		return endpoint.trim();
+	}
+
+	async function handleTestStt() {
+		testSttError = "";
+		testSttResult = "";
+
+		if (!currentRemoteEndpoint.trim()) {
+			testSttError = "API Endpoint is not configured";
+			return;
+		}
+		if (!currentApiKey.trim()) {
+			testSttError = "API Key is not configured";
+			return;
+		}
+
+		isTestingStt = true;
+		try {
+			const wavResp = await fetch("/wav/english.wav");
+			if (!wavResp.ok) throw new Error(`Failed to load test audio: ${wavResp.status}`);
+
+			if (currentEngine === "gemini") {
+				const model = currentRemoteModel.trim() || "gemini-2.0-flash";
+				// Trim path down to the API version segment (e.g. /v1beta) so extra
+				// paths like /openai/chat/completions don't get appended again.
+				const rawEndpoint = currentRemoteEndpoint.trim();
+				let geminiBase: string;
+				try {
+					const parsed = new URL(rawEndpoint);
+					const vMatch = parsed.pathname.match(/^(.*\/v\d+[a-z0-9]*)/i);
+					geminiBase = vMatch ? `${parsed.origin}${vMatch[1]}` : `${parsed.origin}${parsed.pathname}`.replace(/\/$/, "");
+				} catch {
+					geminiBase = rawEndpoint.replace(/\/$/, "");
+				}
+				const url = `${geminiBase}/models/${model}:generateContent?key=${currentApiKey.trim()}`;
+				testSttResolvedUrl = url;
+
+				const wavArrayBuffer = await wavResp.arrayBuffer();
+				const base64 = btoa(String.fromCharCode(...new Uint8Array(wavArrayBuffer)));
+
+				const resp = await fetch(url, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						contents: [{
+							parts: [
+								{ inlineData: { mimeType: "audio/wav", data: base64 } },
+								{ text: "Transcribe this audio. Return only the transcribed text." },
+							],
+						}],
+					}),
+				});
+				if (!resp.ok) {
+					const body = await resp.text();
+					throw new Error(`API error ${resp.status}: ${body}`);
+				}
+				const json = await resp.json();
+				const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? JSON.stringify(json);
+				testSttResult = text.trim() || "(empty response)";
+			} else {
+				testSttResolvedUrl = resolveAsrEndpoint(currentRemoteEndpoint);
+				if (!testSttResolvedUrl) {
+					testSttError = "Configured endpoint looks like a chat/completions endpoint; please set the remote ASR endpoint (e.g. /v1/audio/transcriptions).";
+					return;
+				}
+
+				const wavBlob = await wavResp.blob();
+				const form = new FormData();
+				form.append("audio", wavBlob, "audio.wav");
+				form.append("model", currentRemoteModel.trim() || "whisper-1");
+
+				const resp = await fetch(testSttResolvedUrl, {
+					method: "POST",
+					headers: { Authorization: `Bearer ${currentApiKey}` },
+					body: form,
+				});
+				if (!resp.ok) {
+					const body = await resp.text();
+					throw new Error(`API error ${resp.status}: ${body}`);
+				}
+				const json = await resp.json();
+				const text: string = json.text ?? json.transcript ?? JSON.stringify(json);
+				testSttResult = text.trim() || "(empty response)";
+			}
+		} catch (error) {
+			testSttError = error instanceof Error ? error.message : String(error);
+		} finally {
+			isTestingStt = false;
+		}
 	}
 
 	function getTranslationTestSample(languageCode: string): string {
@@ -343,13 +440,18 @@
 						asrEngineOptions={asrEngineOptions}
 						currentEngine={currentEngine}
 						currentRemoteEndpoint={currentRemoteEndpoint}
-				currentRemoteModel={currentRemoteModel}
-				currentApiKey={currentApiKey}
-				remoteApiKeyHint={remoteApiKeyHint}
-				onEngineChange={handleEngineChange}
-				onRemoteEndpointChange={handleRemoteEndpointChange}
-				onRemoteModelChange={handleRemoteModelChange}
+						currentRemoteModel={currentRemoteModel}
+						currentApiKey={currentApiKey}
+						remoteApiKeyHint={remoteApiKeyHint}
+						onEngineChange={handleEngineChange}
+						onRemoteEndpointChange={handleRemoteEndpointChange}
+						onRemoteModelChange={handleRemoteModelChange}
 						onApiKeyChange={handleApiKeyChange}
+						isTestingStt={isTestingStt}
+						testSttResolvedUrl={testSttResolvedUrl}
+						testSttResult={testSttResult}
+						testSttError={testSttError}
+						onTestStt={handleTestStt}
 					/>
 				{:else if currentSection === "translate"}
 					<TranslationSettingsPanel

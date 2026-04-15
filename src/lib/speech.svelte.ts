@@ -47,7 +47,7 @@ class Speech {
 	subtitles = $state<SubtitleLine[]>([]);
 	language = $state("en-US");
 	errorMessage = $state("");
-	engine = $state<"browser" | "vosk" | "remote">("browser");
+	engine = $state<"browser" | "vosk" | "remote" | "gemini">("browser");
 	remoteEndpoint = $state<string>("");
 	apiKey = $state<string>("");
 	translationEngine = $state<string>("remote");
@@ -398,7 +398,7 @@ class Speech {
 		}
 	};
 
-	setEngine = (engine: "browser" | "vosk" | "remote") => {
+	setEngine = (engine: "browser" | "vosk" | "remote" | "gemini") => {
 		this.engine = engine;
 		if (this.status === "listening") {
 			this.stop();
