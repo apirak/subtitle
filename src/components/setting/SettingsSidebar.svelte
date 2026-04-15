@@ -1,5 +1,5 @@
 <script lang="ts">
-	type SettingsSection = "theme" | "language" | "tts" | "translate";
+	type SettingsSection = "theme" | "language" | "stt" | "translate";
 
 	interface Props {
 		activeSection: SettingsSection;

@@ -33,7 +33,7 @@
 	<div class="settings-section-label">Speech And Translation</div>
 
 	<div class="mb-5">
-		<label class="settings-field-label" for="split-source-language">Source Language</label>
+		<label class="settings-field-label" for="split-source-language">Source Column</label>
 		<select
 			id="split-source-language"
 			class="settings-select"
@@ -47,7 +47,7 @@
 	</div>
 
 	<div class="mb-5">
-		<label class="settings-field-label" for="split-target-language">Translate To</label>
+		<label class="settings-field-label" for="split-target-language">Translate Column 1</label>
 		<select
 			id="split-target-language"
 			class="settings-select"
@@ -61,7 +61,7 @@
 	</div>
 
 	<div>
-		<label class="settings-field-label" for="split-target-language-2">Translation 2</label>
+		<label class="settings-field-label" for="split-target-language-2">Translate Column 2</label>
 		<select
 			id="split-target-language-2"
 			class="settings-select"

@@ -12,7 +12,7 @@
 	import SettingsSplitModal from "./components/SettingsSplitModal.svelte";
 	import "./app.css";
 
-	type SettingsSection = "theme" | "language" | "tts" | "translate";
+	type SettingsSection = "theme" | "language" | "stt" | "translate";
 
 	onDestroy(() => {
 		speech.destroy();

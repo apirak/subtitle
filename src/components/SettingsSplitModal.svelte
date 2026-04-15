@@ -13,7 +13,7 @@
 	import SttSettingsPanel from "./setting/panels/SttSettingsPanel.svelte";
 	import TranslationSettingsPanel from "./setting/panels/TranslationSettingsPanel.svelte";
 
-	type SettingsSection = "theme" | "language" | "tts" | "translate";
+	type SettingsSection = "theme" | "language" | "stt" | "translate";
 	type ThemeMode = "night" | "day" | "toy";
 
 	interface Props {
@@ -94,14 +94,14 @@
 	const menuItems: Array<{ key: SettingsSection; label: string }> = [
 		{ key: "theme", label: "Theme" },
 		{ key: "language", label: "Language" },
-		{ key: "tts", label: "TTS" },
+		{ key: "stt", label: "Speech To Text" },
 		{ key: "translate", label: "Translate" },
 	];
 
 	const sectionTitles: Record<SettingsSection, string> = {
 		theme: "Theme",
 		language: "Language",
-		tts: "TTS",
+		stt: "Speech To Text",
 		translate: "Translate",
 	};
 
@@ -324,7 +324,7 @@
 						onTargetLangChange={handleTargetLangChange}
 						onTargetLang2Change={handleTargetLang2Change}
 					/>
-				{:else if currentSection === "tts"}
+				{:else if currentSection === "stt"}
 					<SttSettingsPanel
 						asrEngineOptions={asrEngineOptions}
 						currentEngine={currentEngine}
