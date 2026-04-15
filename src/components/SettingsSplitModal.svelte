@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from "../lib/languages";
+	import SettingsSidebar from "./setting/SettingsSidebar.svelte";
+	import SettingsPanelHeader from "./setting/SettingsPanelHeader.svelte";
 
 	type SettingsSection = "theme" | "language" | "tts" | "translate";
 	type ThemeMode = "night" | "day" | "toy";
@@ -227,34 +229,10 @@
 		class="settings-shell flex w-full max-w-230 min-h-130 max-h-[calc(100vh-2rem)] overflow-hidden rounded-2xl"
 		onclick={(event) => event.stopPropagation()}
 	>
-		<aside class="settings-sidebar w-60 overflow-y-auto p-5">
-			<div class="settings-eyebrow">Settings</div>
-			<nav class="flex flex-col gap-2" aria-label="Settings menu">
-				{#each menuItems as item}
-					<button
-						type="button"
-						onclick={() => handleSectionClick(item.key)}
-						class="settings-menu-button"
-						data-selected={currentSection === item.key ? "true" : undefined}
-					>
-						{item.label}
-					</button>
-				{/each}
-			</nav>
-		</aside>
+		<SettingsSidebar activeSection={currentSection} {menuItems} onSectionChange={handleSectionClick} />
 
 		<section class="flex min-h-0 flex-1 flex-col p-6">
-			<div class="flex items-center justify-between mb-6">
-				<h2 class="settings-title">{sectionTitles[currentSection]} Settings</h2>
-				<button
-					type="button"
-					class="settings-close"
-					onclick={onClose}
-					aria-label="Close settings"
-				>
-					×
-				</button>
-			</div>
+			<SettingsPanelHeader title="{sectionTitles[currentSection]} Settings" {onClose} />
 
 			<div class="settings-panel">
 				{#if currentSection === "theme"}
@@ -510,12 +488,6 @@
 		color: var(--on-surface-color);
 	}
 
-	.settings-sidebar {
-		background: var(--surface-alt-color);
-		border-right: 1px solid var(--border-color-subtle);
-	}
-
-	.settings-eyebrow,
 	.settings-section-label,
 	.settings-field-label {
 		color: var(--muted-color);
@@ -525,7 +497,6 @@
 		text-transform: uppercase;
 	}
 
-	.settings-eyebrow,
 	.settings-section-label {
 		margin-bottom: 1rem;
 	}
@@ -533,61 +504,6 @@
 	.settings-field-label {
 		display: block;
 		margin-bottom: 0.5rem;
-	}
-
-	.settings-menu-button {
-		width: 100%;
-		cursor: pointer;
-		border-radius: 0.75rem;
-		border: 1px solid transparent;
-		padding: 0.625rem 0.75rem;
-		text-align: left;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--on-surface-color);
-		transition:
-			background-color 160ms ease,
-			border-color 160ms ease,
-			color 160ms ease;
-	}
-
-	.settings-menu-button:hover {
-		background: var(--surface-hover-color);
-		border-color: var(--border-color-default);
-	}
-
-	.settings-menu-button[data-selected="true"] {
-		background: var(--surface-active-color);
-		border-color: var(--border-color-strong);
-		color: var(--on-surface-color-strong);
-	}
-
-	.settings-title {
-		color: var(--on-surface-color-strong);
-		font-size: 1.125rem;
-		font-weight: 600;
-	}
-
-	.settings-close {
-		display: grid;
-		height: 2rem;
-		width: 2rem;
-		place-items: center;
-		cursor: pointer;
-		border-radius: 9999px;
-		border: 1px solid var(--border-color-default);
-		background: transparent;
-		color: var(--on-surface-color);
-		transition:
-			background-color 160ms ease,
-			border-color 160ms ease,
-			color 160ms ease;
-	}
-
-	.settings-close:hover {
-		background: var(--surface-hover-color);
-		border-color: var(--border-color-strong);
-		color: var(--on-surface-color-strong);
 	}
 
 	.settings-panel {
