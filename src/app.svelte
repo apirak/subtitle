@@ -8,7 +8,6 @@
 	import IdleScreen from "./components/IdleScreen.svelte";
 	import ListeningScreen from "./components/ListeningScreen.svelte";
 	import ErrorScreen from "./components/ErrorScreen.svelte";
-	import Settings from "./components/Settings.svelte";
 	import SettingsSplitModal from "./components/SettingsSplitModal.svelte";
 	import "./app.css";
 
@@ -23,15 +22,12 @@
 	let theme = $state<"night" | "day" | "toy">("night");
 	let translations1 = $state<Record<string, string>>({});
 	let translations2 = $state<Record<string, string>>({});
-	let settingsOpen = $state(false);
 	let settingsSplitOpen = $state(false);
 	let settingsSection = $state<SettingsSection>("theme");
 	let selectedEngine = $state<"browser" | "vosk" | "remote">("browser");
 	let remoteEndpoint = $state("");
 	let modelPath = $state("");
 	let apiKey = $state("");
-	let overlayTransparency = $state(80);
-	let fontSize = $state(24);
 	let translationEngine = $state("remote");
 	let translationEndpoint = $state("");
 	let translationModel = $state("");
@@ -86,8 +82,6 @@
 				targetLang = settings.target_lang;
 				targetLang2 = settings.target_lang_2 || "none";
 				remoteEndpoint = settings.remote_endpoint ?? "";
-				overlayTransparency = Math.round(settings.overlay_transparency * 100);
-				fontSize = settings.overlay_font_size;
 				translationEngine = settings.translation_engine;
 				translationEndpoint = settings.translation_endpoint ?? "";
 				translationModel = settings.translation_model ?? "";
@@ -300,8 +294,7 @@
 			{sourceLabel}
 			targetLabel={targetLabel1}
 			onStart={handleStart}
-			onSettings={() => (settingsOpen = true)}
-			onSettingsSplit={() => (settingsSplitOpen = true)}
+			onSettings={() => (settingsSplitOpen = true)}
 		/>
 	{:else if speech.status === "listening"}
 		<ListeningScreen
@@ -317,33 +310,6 @@
 	{:else if speech.status === "error"}
 		<ErrorScreen message={speech.errorMessage} onRetry={speech.start} />
 	{/if}
-
-	<Settings
-		open={settingsOpen}
-		language={speech.language}
-		onLanguageChange={handleSourceLanguageChange}
-		{targetLang}
-		onTargetLangChange={handleTargetLanguageChange}
-		onClose={() => (settingsOpen = false)}
-		{overlayTransparency}
-		onOverlayTransparencyChange={(v) => {
-			overlayTransparency = v;
-			speech.saveSetting?.("overlay_transparency", v).catch(console.error);
-		}}
-		{fontSize}
-		onFontSizeChange={(v) => {
-			fontSize = v;
-			speech.saveSetting?.("font_size", v).catch(console.error);
-		}}
-		{translationEngine}
-		onTranslationEngineChange={handleTranslationEngineChange}
-		engine={speech.engine}
-		onEngineChange={(v) => handleEngineChange(v as "browser" | "vosk" | "remote")}
-		{remoteEndpoint}
-		onRemoteEndpointChange={handleRemoteEndpointChange}
-		{apiKey}
-		onApiKeyChange={handleApiKeyChange}
-	/>
 
 	<SettingsSplitModal
 		open={settingsSplitOpen}
