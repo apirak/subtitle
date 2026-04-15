@@ -9,8 +9,9 @@ const MAX_RETRIES: u32 = 3;
 const REQUEST_TIMEOUT_SECS: u64 = 30;
 const SILENCE_THRESHOLD: f32 = 0.005;
 const MIN_SPEECH_RMS: f32 = 0.04;
-const MIN_SPEECH_RMS_GEMINI: f32 = 0.02;
+const MIN_SPEECH_RMS_GEMINI: f32 = 0.007;
 const MAX_CHUNK_SAMPLES: usize = 48_000;
+const MIN_SILENCE_FLUSH_SAMPLES_GEMINI: usize = 48_000;
 const SILENCE_WINDOW_SAMPLES: usize = 1024;
 const SILENCE_DURATION_MS: u64 = 300;
 const NO_AUDIO_TIMEOUT_SECS: u64 = 5;
@@ -35,6 +36,14 @@ fn min_speech_rms_for_provider(provider: AsrProvider) -> f32 {
     match provider {
         AsrProvider::GeminiBatch => MIN_SPEECH_RMS_GEMINI,
         AsrProvider::OpenAiCompatible => MIN_SPEECH_RMS,
+    }
+}
+
+fn min_silence_flush_samples_for_provider(provider: AsrProvider) -> usize {
+    match provider {
+        // Keep Gemini chunks longer to improve transcription stability for longer phrases.
+        AsrProvider::GeminiBatch => MIN_SILENCE_FLUSH_SAMPLES_GEMINI,
+        AsrProvider::OpenAiCompatible => SILENCE_WINDOW_SAMPLES,
     }
 }
 
@@ -551,6 +560,7 @@ pub async fn remote_asr_start(
     let client = reqwest::Client::new();
     let provider = AsrProvider::from_engine(&engine);
     let min_speech_rms = min_speech_rms_for_provider(provider);
+    let min_silence_flush_samples = min_silence_flush_samples_for_provider(provider);
     let language = Some(source_lang);
     let model = if model.trim().is_empty() {
         match provider {
@@ -564,10 +574,11 @@ pub async fn remote_asr_start(
     let mut chunk_count: u64 = 0;
 
     log::info!(
-        "remote_asr_start: provider={:?}, model={}, min_speech_rms={:.4}",
+        "remote_asr_start: provider={:?}, model={}, min_speech_rms={:.4}, min_silence_flush_samples={}",
         provider,
         model,
-        min_speech_rms
+        min_speech_rms,
+        min_silence_flush_samples
     );
 
     tauri::async_runtime::spawn(async move {
@@ -708,7 +719,7 @@ pub async fn remote_asr_start(
 
                 if let Some(silence_start_time) = silence_start {
                     if last_sample_time.saturating_sub(silence_start_time) >= SILENCE_DURATION_MS
-                        && buffer.len() > SILENCE_WINDOW_SAMPLES
+                        && buffer.len() >= min_silence_flush_samples
                     {
                         let flush_len = buffer.len().saturating_sub(SILENCE_WINDOW_SAMPLES / 2);
                         let to_send: Vec<f32> = buffer.drain(..flush_len).collect();
@@ -988,12 +999,13 @@ mod tests {
     fn test_silence_threshold_constant() {
         assert_eq!(SILENCE_THRESHOLD, 0.005);
         assert_eq!(MIN_SPEECH_RMS, 0.04);
-        assert_eq!(MIN_SPEECH_RMS_GEMINI, 0.02);
+        assert_eq!(MIN_SPEECH_RMS_GEMINI, 0.007);
     }
 
     #[test]
     fn test_max_chunk_samples_constant() {
         assert_eq!(MAX_CHUNK_SAMPLES, 48_000);
+        assert_eq!(MIN_SILENCE_FLUSH_SAMPLES_GEMINI, 48_000);
     }
 
     #[test]
