@@ -4,8 +4,9 @@
 
 ## ภาพรวมแบบเร็ว
 
-- จุดเริ่มต้นทุก engine คือ audio capture จากไมค์ผ่าน Rust
-- เสียงถูก normalize เป็น 16kHz mono เพื่อให้ pipeline ฝั่ง STT ใช้รูปแบบเดียวกัน
+- จุดเริ่มต้นของ Vosk/Gemini/OpenAI-compatible คือ audio capture จากไมค์ผ่าน Rust
+- Browser engine ใช้ Web Speech API โดยตรง (ไม่เริ่ม Rust audio capture)
+- สำหรับ Vosk/Gemini/OpenAI-compatible เสียงจะถูก normalize เป็น 16kHz mono
 - Browser และ Vosk มี behavior ต่างจาก Gemini/OpenAI-compatible ตรงที่การแบ่งคำพูดและการปล่อยผลลัพธ์
 - Gemini/OpenAI-compatible ใช้ buffer + RMS/VAD gate ก่อนส่งขึ้น API
 
@@ -13,12 +14,13 @@
 
 ```mermaid
 flowchart TD
-    A[Mic Input] --> B[CPAL Capture 48k F32]
+    A[Mic Input] --> D{Selected Engine}
+
+    D -->|Vosk / Gemini / OpenAI-compatible| B[CPAL Capture 48k F32]
     B --> C[Resample 16k Mono]
-    C --> D{Selected Engine}
 
     %% Browser path
-    D -->|Browser| E1[Web Speech API]
+    D -->|Browser| E1[Web Speech API (direct mic path)]
     E1 --> E2[Browser internal VAD + segmentation]
     E2 --> E3[Interim/Final events in webview]
     E3 --> UI[Subtitle UI]

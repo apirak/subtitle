@@ -175,6 +175,10 @@ class Speech {
 	};
 
 	startCapture = async (): Promise<{ sample_rate: number; channels: number }> => {
+		if (this.engine === "browser") {
+			// Browser STT uses Web Speech API directly, so no Rust capture is required.
+			return { sample_rate: 16000, channels: 1 };
+		}
 		if (this.engine === "remote" || this.engine === "gemini") {
 			try {
 				const result = await invoke<{ sample_rate: number; channels: number }>("audio_capture_start");
@@ -206,6 +210,9 @@ class Speech {
 	};
 
 	stopCapture = async (): Promise<void> => {
+		if (this.engine === "browser") {
+			return;
+		}
 		if (this.engine === "remote" || this.engine === "gemini") {
 			try {
 				await invoke("remote_asr_stop");
