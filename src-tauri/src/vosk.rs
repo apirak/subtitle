@@ -48,7 +48,7 @@ impl VoskAsr {
             .take_receiver()
             .ok_or("Audio receiver not available")?;
 
-        let (stop_tx, mut stop_rx) = mpsc::channel::<()>(1);
+        let (stop_tx, stop_rx) = mpsc::channel::<()>(1);
         *self.stop_tx.lock().map_err(|e| e.to_string())? = Some(stop_tx);
 
         let handle = tokio::spawn(async move {

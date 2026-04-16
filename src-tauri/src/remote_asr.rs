@@ -176,7 +176,15 @@ async fn send_transcription(
 ) -> Result<String, String> {
     match provider {
         AsrProvider::OpenAiCompatible => {
-            send_openai_compatible_transcription(client, endpoint, api_key, audio_bytes, language, model).await
+            send_openai_compatible_transcription(
+                client,
+                endpoint,
+                api_key,
+                audio_bytes,
+                language,
+                model,
+            )
+            .await
         }
         AsrProvider::GeminiBatch => {
             send_gemini_batch_transcription(client, endpoint, api_key, audio_bytes, model).await
@@ -187,7 +195,7 @@ async fn send_transcription(
 fn resolve_openai_transcription_url(endpoint: &str) -> String {
     let endpoint = endpoint.trim_end_matches('/').to_string();
 
-    if endpoint.ends_with("/v1/audio/transcriptions") || endpoint.contains("/v1/inference/") {
+    if endpoint.ends_with("/audio/transcriptions") || endpoint.contains("/v1/inference/") {
         endpoint
     } else if endpoint.ends_with("/v1") {
         format!("{}/audio/transcriptions", endpoint)
@@ -214,7 +222,8 @@ fn resolve_gemini_generate_content_url(endpoint: &str, model: &str, api_key: &st
                 version_path = path[..end].to_string();
             }
 
-            let mut normalized = format!("{}{}", parsed.origin().ascii_serialization(), version_path);
+            let mut normalized =
+                format!("{}{}", parsed.origin().ascii_serialization(), version_path);
             normalized = normalized.trim_end_matches('/').to_string();
             if normalized.is_empty() {
                 raw_endpoint.to_string()
@@ -290,7 +299,7 @@ async fn send_openai_compatible_transcription(
         .map_err(|e| format!("mime_str error: {}", e))?;
 
     let mut form = reqwest::multipart::Form::new()
-        .part("audio", audio_part)
+        .part("file", audio_part)
         .text("model", model.to_string());
 
     if let Some(lang) = language {
@@ -311,7 +320,10 @@ async fn send_openai_compatible_transcription(
         .map_err(|e| format!("HTTP request failed: {}", e))?;
 
     let status = resp.status();
-    log::info!("send_openai_compatible_transcription: response status={}", status);
+    log::info!(
+        "send_openai_compatible_transcription: response status={}",
+        status
+    );
 
     if status == 401 {
         return Err("Invalid API key".to_string());
@@ -331,7 +343,11 @@ async fn send_openai_compatible_transcription(
     }
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        log::error!("send_openai_compatible_transcription: API error {}: {}", status, body);
+        log::error!(
+            "send_openai_compatible_transcription: API error {}: {}",
+            status,
+            body
+        );
         return Err(format!("API error {}: {}", status, body));
     }
 
@@ -347,6 +363,7 @@ async fn send_openai_compatible_transcription(
     #[derive(serde::Deserialize)]
     struct TranscriptionResponse {
         text: String,
+        #[serde(default)]
         segments: Vec<Segment>,
     }
 
@@ -361,6 +378,10 @@ async fn send_openai_compatible_transcription(
     );
     let transcription: TranscriptionResponse = serde_json::from_str(&body_text)
         .map_err(|e| format!("JSON parse failed: {} (body: {})", e, body_text))?;
+
+    if transcription.segments.is_empty() {
+        return Ok(transcription.text);
+    }
 
     let avg_confidence = transcription
         .segments
@@ -391,8 +412,8 @@ async fn send_gemini_batch_transcription(
     log::info!(
         "send_gemini_batch_transcription: POST {} (audio={} bytes, model={})",
         loggable_url,
-        audio_bytes.len()
-        ,model
+        audio_bytes.len(),
+        model
     );
 
     let audio_base64 = base64::engine::general_purpose::STANDARD.encode(audio_bytes);
@@ -429,7 +450,11 @@ async fn send_gemini_batch_transcription(
 
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        log::error!("send_gemini_batch_transcription: API error {}: {}", status, body);
+        log::error!(
+            "send_gemini_batch_transcription: API error {}: {}",
+            status,
+            body
+        );
         return Err(format!("API error {}: {}", status, body));
     }
 
@@ -488,7 +513,17 @@ async fn transcribe_with_retry(
             provider,
             model
         );
-        match send_transcription(client, provider, endpoint, api_key, audio_bytes, language, model).await {
+        match send_transcription(
+            client,
+            provider,
+            endpoint,
+            api_key,
+            audio_bytes,
+            language,
+            model,
+        )
+        .await
+        {
             Ok(text) => {
                 log::info!("transcribe_with_retry: got text ({}) chars", text.len());
                 return Ok(text);

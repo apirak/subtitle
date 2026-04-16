@@ -2,8 +2,32 @@ use crate::audio;
 use crate::vosk::VoskAsr;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use std::path::Path;
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
+
+// =============================================================================
+// Vosk Model Management Helpers
+// =============================================================================
+
+fn resolve_model_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let data_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    Ok(data_dir.join("vosk-model"))
+}
+
+fn is_valid_vosk_model(path: &Path) -> bool {
+    path.join("conf/model.conf").exists() || path.join("am/final.mdl").exists()
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VoskModelInfo {
+    pub status: String,             // "ready" | "not_found"
+    pub model_path: String,         // resolved path
+    pub model_name: Option<String>, // detected model name
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AudioCaptureResponse {
@@ -93,7 +117,7 @@ pub async fn audio_capture_stop(state: State<'_, audio::AudioState>) -> Result<(
 }
 
 #[tauri::command]
-pub async fn asr_infer(audio_data: Vec<u8>, sample_rate: u32) -> Result<AsrResponse, String> {
+pub async fn asr_infer(_audio_data: Vec<u8>, _sample_rate: u32) -> Result<AsrResponse, String> {
     Ok(AsrResponse {
         text: "stub".to_string(),
         is_final: true,
@@ -159,7 +183,11 @@ pub async fn translate(
     let status = response.status();
     if !status.is_success() {
         let error_body = response.text().await.unwrap_or_default();
-        log::error!("[Translate] API returned status {}: {}", status.as_u16(), error_body);
+        log::error!(
+            "[Translate] API returned status {}: {}",
+            status.as_u16(),
+            error_body
+        );
         if status.as_u16() == 401 {
             return Err("Invalid API key (401 Unauthorized)".to_string());
         }
@@ -358,13 +386,13 @@ pub async fn test_event_emission(app: tauri::AppHandle) -> Result<String, String
 }
 
 #[tauri::command]
-pub async fn api_key_get(key_name: String) -> Result<Option<String>, String> {
+pub async fn api_key_get(_key_name: String) -> Result<Option<String>, String> {
     log::warn!("api_key_get is deprecated - frontend uses Stronghold JS API directly");
     Ok(None)
 }
 
 #[tauri::command]
-pub async fn api_key_set(key_name: String, key_value: String) -> Result<(), String> {
+pub async fn api_key_set(_key_name: String, _key_value: String) -> Result<(), String> {
     log::warn!("api_key_set is deprecated - frontend uses Stronghold JS API directly");
     Ok(())
 }
@@ -399,9 +427,252 @@ pub async fn stronghold_get_password(app: tauri::AppHandle) -> Result<String, St
 }
 
 #[tauri::command]
-pub async fn vosk_load_model(path: String, state: State<'_, VoskAsr>) -> Result<(), String> {
+pub async fn vosk_model_status(app: AppHandle) -> Result<VoskModelInfo, String> {
+    let model_dir = resolve_model_dir(&app)?;
+    let model_path_str = model_dir.to_string_lossy().to_string();
+
+    if model_dir.exists() && is_valid_vosk_model(&model_dir) {
+        let model_name = model_dir
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string());
+        Ok(VoskModelInfo {
+            status: "ready".to_string(),
+            model_path: model_path_str,
+            model_name,
+        })
+    } else {
+        Ok(VoskModelInfo {
+            status: "not_found".to_string(),
+            model_path: model_path_str,
+            model_name: None,
+        })
+    }
+}
+
+#[tauri::command]
+pub async fn vosk_model_set_from_directory(app: AppHandle, path: String) -> Result<String, String> {
+    let src = Path::new(&path);
+    if !src.exists() || !src.is_dir() {
+        return Err(format!("Directory does not exist: {}", path));
+    }
+    if !is_valid_vosk_model(src) {
+        return Err(
+            "Selected directory is not a valid Vosk model (missing conf/model.conf or am/final.mdl)"
+                .to_string(),
+        );
+    }
+
+    let dest = resolve_model_dir(&app)?;
+    let dest_parent = dest
+        .parent()
+        .ok_or_else(|| "Cannot resolve parent of model dir".to_string())?;
+    std::fs::create_dir_all(dest_parent)
+        .map_err(|e| format!("Failed to create data dir: {}", e))?;
+
+    // Remove existing model if present
+    if dest.exists() {
+        std::fs::remove_dir_all(&dest).map_err(|e| format!("Failed to remove old model: {}", e))?;
+    }
+
+    // Copy directory recursively
+    copy_dir_recursive(src, &dest)?;
+
+    let result_path = dest.to_string_lossy().to_string();
+    log::info!("[Vosk] Model copied to {}", result_path);
+    Ok(result_path)
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst)
+        .map_err(|e| format!("Failed to create dir {}: {}", dst.display(), e))?;
+    for entry in std::fs::read_dir(src)
+        .map_err(|e| format!("Failed to read dir {}: {}", src.display(), e))?
+    {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path).map_err(|e| {
+                format!(
+                    "Failed to copy {} -> {}: {}",
+                    src_path.display(),
+                    dst_path.display(),
+                    e
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn vosk_model_download(app: AppHandle, url: String) -> Result<(), String> {
+    let model_dir = resolve_model_dir(&app)?;
+    let data_dir = model_dir
+        .parent()
+        .ok_or_else(|| "Cannot resolve data dir".to_string())?
+        .to_path_buf();
+
+    // Ensure data directory exists
+    std::fs::create_dir_all(&data_dir).map_err(|e| format!("Failed to create data dir: {}", e))?;
+
+    // Download in background task
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        if let Err(e) = download_and_extract_model(&app_clone, &url, &data_dir, &model_dir).await {
+            log::error!("[Vosk] Download failed: {}", e);
+            let _ = app_clone.emit("vosk-download-error", serde_json::json!({ "message": e }));
+        }
+    });
+
+    Ok(())
+}
+
+async fn download_and_extract_model(
+    app: &AppHandle,
+    url: &str,
+    data_dir: &Path,
+    model_dir: &Path,
+) -> Result<(), String> {
+    // Download to temp file
+    let tmp_dir =
+        tempfile::tempdir_in(data_dir).map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    let zip_path = tmp_dir.path().join("model.zip");
+
+    log::info!("[Vosk] Downloading model from {}", url);
+    let response = reqwest::get(url)
+        .await
+        .map_err(|e| format!("Download request failed: {}", e))?;
+
+    let total_size = response.content_length();
+    let mut downloaded: u64 = 0;
+
+    // Stream download with progress
+    let mut file = std::fs::File::create(&zip_path)
+        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+    use std::io::Write;
+    let mut stream = response.bytes_stream();
+    use futures_util::StreamExt;
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Download stream error: {}", e))?;
+        file.write_all(&chunk)
+            .map_err(|e| format!("Write error: {}", e))?;
+        downloaded += chunk.len() as u64;
+
+        let percentage = if let Some(total) = total_size {
+            (downloaded as f64 / total as f64 * 100.0) as u32
+        } else {
+            0
+        };
+
+        let _ = app.emit(
+            "vosk-download-progress",
+            serde_json::json!({
+                "downloaded": downloaded,
+                "total": total_size.unwrap_or(0),
+                "percentage": percentage,
+            }),
+        );
+    }
+
+    drop(file);
+    log::info!(
+        "[Vosk] Download complete ({} bytes), extracting...",
+        downloaded
+    );
+
+    // Remove existing model
+    if model_dir.exists() {
+        std::fs::remove_dir_all(model_dir)
+            .map_err(|e| format!("Failed to remove old model: {}", e))?;
+    }
+
+    // Extract zip, stripping top-level directory
+    extract_vosk_zip(&zip_path, model_dir)?;
+
+    // Cleanup temp dir
+    let _ = tmp_dir.close();
+
+    log::info!("[Vosk] Model extracted to {}", model_dir.display());
+    let _ = app.emit(
+        "vosk-download-complete",
+        serde_json::json!({ "model_path": model_dir.to_string_lossy() }),
+    );
+
+    Ok(())
+}
+
+fn extract_vosk_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
+    let file = std::fs::File::open(zip_path).map_err(|e| format!("Failed to open zip: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("Failed to read zip: {}", e))?;
+
+    // Detect top-level directory prefix from first entry
+    let top_dir = {
+        let first_name = archive
+            .by_index(0)
+            .map(|f| f.name().to_string())
+            .unwrap_or_default();
+        // e.g. "vosk-model-small-en-us-0.15/" → "vosk-model-small-en-us-0.15"
+        if first_name.ends_with('/') {
+            Some(first_name.trim_end_matches('/').to_string())
+        } else {
+            None
+        }
+    };
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read zip entry {}: {}", i, e))?;
+        let name = entry.name().to_string();
+
+        // Strip top-level directory prefix
+        let relative = if let Some(ref prefix) = top_dir {
+            name.strip_prefix(prefix)
+                .unwrap_or(&name)
+                .trim_start_matches('/')
+                .to_string()
+        } else {
+            name
+        };
+
+        if relative.is_empty() {
+            continue;
+        }
+
+        let out_path = dest.join(&relative);
+
+        if entry.is_dir() {
+            std::fs::create_dir_all(&out_path)
+                .map_err(|e| format!("Failed to create dir {}: {}", out_path.display(), e))?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            let mut outfile = std::fs::File::create(&out_path)
+                .map_err(|e| format!("Failed to create {}: {}", out_path.display(), e))?;
+            std::io::copy(&mut entry, &mut outfile)
+                .map_err(|e| format!("Failed to extract {}: {}", out_path.display(), e))?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn vosk_load_model(app: AppHandle, state: State<'_, VoskAsr>) -> Result<(), String> {
+    let model_dir = resolve_model_dir(&app)?;
+    let path_str = model_dir.to_string_lossy().to_string();
+
+    if !model_dir.exists() || !is_valid_vosk_model(&model_dir) {
+        return Err(format!("Vosk model not found at {}", path_str));
+    }
+
     let model = state.inner().model.clone();
-    let path = path.clone();
     tokio::task::spawn_blocking(move || {
         let model_guard = model.lock().map_err(|e| e.to_string())?;
         if model_guard.is_some() {
@@ -409,25 +680,14 @@ pub async fn vosk_load_model(path: String, state: State<'_, VoskAsr>) -> Result<
         }
         drop(model_guard);
 
-        let vosk_model =
-            vosk::Model::new(&path).ok_or_else(|| format!("Failed to load model from {}", path))?;
+        let vosk_model = vosk::Model::new(&path_str)
+            .ok_or_else(|| format!("Failed to load model from {}", path_str))?;
         let mut model_guard = model.lock().map_err(|e| e.to_string())?;
         *model_guard = Some(std::sync::Arc::new(vosk_model));
         Ok(())
     })
     .await
     .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
-pub async fn vosk_get_model_path() -> Result<String, String> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let model_path = format!("{}/vosk-model", manifest_dir);
-    let path = std::path::Path::new(&model_path);
-    if !path.exists() {
-        return Err(format!("Model path does not exist: {}", model_path));
-    }
-    Ok(model_path)
 }
 
 #[tauri::command]
@@ -546,7 +806,12 @@ mod tests {
             "https://api.deepinfra.com/v1/openai/chat/completions",
             "https://api.openai.com/v1/chat/completions",
         ] {
-            assert_eq!(normalize_translation_endpoint(url), url, "should preserve: {}", url);
+            assert_eq!(
+                normalize_translation_endpoint(url),
+                url,
+                "should preserve: {}",
+                url
+            );
         }
     }
 
@@ -594,8 +859,7 @@ mod tests {
     #[test]
     fn test_normalize_deepinfra_openai_base_url() {
         // DeepInfra OpenAI-compat base: .../v1/openai
-        let normalized =
-            normalize_translation_endpoint("https://api.deepinfra.com/v1/openai");
+        let normalized = normalize_translation_endpoint("https://api.deepinfra.com/v1/openai");
         assert_eq!(
             normalized,
             "https://api.deepinfra.com/v1/openai/chat/completions"
@@ -637,7 +901,10 @@ mod tests {
         assert_eq!(deserialized.overlay_font_size, settings.overlay_font_size);
         assert_eq!(deserialized.subtitle_position, settings.subtitle_position);
         assert_eq!(deserialized.translation_engine, settings.translation_engine);
-        assert_eq!(deserialized.translation_endpoint, settings.translation_endpoint);
+        assert_eq!(
+            deserialized.translation_endpoint,
+            settings.translation_endpoint
+        );
         assert_eq!(deserialized.translation_model, settings.translation_model);
         assert_eq!(
             deserialized.translation_api_key_name,
@@ -645,7 +912,10 @@ mod tests {
         );
         assert_eq!(deserialized.remote_endpoint, settings.remote_endpoint);
         assert_eq!(deserialized.remote_model, settings.remote_model);
-        assert_eq!(deserialized.remote_min_speech_rms, settings.remote_min_speech_rms);
+        assert_eq!(
+            deserialized.remote_min_speech_rms,
+            settings.remote_min_speech_rms
+        );
         assert_eq!(
             deserialized.remote_api_key_name,
             settings.remote_api_key_name

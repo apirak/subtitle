@@ -63,6 +63,7 @@ A cross-platform desktop subtitle overlay app built with Tauri v2 and Svelte 5. 
 - **Prettier** for Svelte formatting (`.prettierrc`, `.prettierignore`)
 - **Lefthook** for git hooks (`lefthook.yml`): pre-commit (typecheck, biome, prettier, rustfmt), pre-push (vitest, cargo test, typecheck, audit)
 - **Vitest** for frontend tests (`src/lib/__tests__/`, `vitest.config.ts`)
+- **TypeScript checking** uses `pnpm typecheck:native` (runs `tsgo --noEmit`, not `tsc`)
 - **Cargo test** for Rust unit tests (module-level `#[cfg(test)]` blocks)
 - TypeScript ~6.0.2 with strict settings:
 ## Key Dependencies

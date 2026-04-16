@@ -9,6 +9,7 @@
 	import IdleScreen from "./components/IdleScreen.svelte";
 	import ListeningScreen from "./components/ListeningScreen.svelte";
 	import ErrorScreen from "./components/ErrorScreen.svelte";
+	import VoskModelSetup from "./components/VoskModelSetup.svelte";
 	import SettingsSplitModal from "./components/SettingsSplitModal.svelte";
 	import "./app.css";
 
@@ -122,11 +123,11 @@
 							if (result) {
 								translationApiKey = result;
 								speech.translationApiKey = result;
-						}
-					})
-					.catch((err) => {
-						console.error("Failed to load translation API key from Stronghold:", err);
-					});
+							}
+						})
+						.catch((err) => {
+							console.error("Failed to load translation API key from Stronghold:", err);
+						});
 				}
 			} catch (err) {
 				console.error("Failed to load settings:", err);
@@ -313,10 +314,7 @@
 	<title>Real-time Subtitles</title>
 </svelte:head>
 
-<div
-	class="w-full h-screen flex flex-col items-center justify-center relative overflow-hidden"
-	data-theme={theme}
->
+<div class="w-full h-screen flex flex-col items-center justify-center relative overflow-hidden" data-theme={theme}>
 	{#if speech.status === "idle"}
 		<IdleScreen
 			{sourceLabel}
@@ -325,6 +323,13 @@
 			onSettings={() => (settingsSplitOpen = true)}
 			{isLoadingApiKeys}
 			requiresRemoteApiKey={(selectedEngine === "remote" || selectedEngine === "gemini") && !apiKey}
+		/>
+	{:else if speech.status === "vosk_setup"}
+		<VoskModelSetup
+			onModelReady={() => speech.start()}
+			onCancel={() => {
+				speech.status = "idle";
+			}}
 		/>
 	{:else if speech.status === "listening"}
 		<ListeningScreen
@@ -346,19 +351,19 @@
 	<SettingsSplitModal
 		open={settingsSplitOpen}
 		activeSection={settingsSection}
-		theme={theme}
+		{theme}
 		language={speech.language}
 		{targetLang}
 		{targetLang2}
 		engine={speech.engine}
 		{remoteEndpoint}
-		remoteModel={remoteModel}
-		remoteMinSpeechRms={remoteMinSpeechRms}
+		{remoteModel}
+		{remoteMinSpeechRms}
 		{apiKey}
 		{translationEngine}
 		{translationEndpoint}
 		{translationModel}
-		translationApiKey={translationApiKey}
+		{translationApiKey}
 		onThemeChange={(nextTheme) => {
 			theme = nextTheme;
 			speech.saveSetting("theme", nextTheme).catch(console.error);

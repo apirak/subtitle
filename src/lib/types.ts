@@ -1,4 +1,4 @@
-export type AppStatus = 'idle' | 'listening' | 'error';
+export type AppStatus = 'idle' | 'listening' | 'error' | 'vosk_setup';
 
 export interface SubtitleLine {
   id: string;
