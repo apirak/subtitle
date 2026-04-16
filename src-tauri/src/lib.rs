@@ -96,6 +96,7 @@ pub fn run() {
                 .join("stronghold.salt");
             app.handle()
                 .plugin(Builder::with_argon2(&salt_path).build())?;
+            app.handle().plugin(tauri_plugin_dialog::init())?;
 
             app.manage(audio::AudioState::new());
             app.manage(vosk::VoskAsr::new());
@@ -115,7 +116,9 @@ pub fn run() {
             commands::stronghold_get_vault_path,
             commands::stronghold_get_password,
             commands::vosk_load_model,
-            commands::vosk_get_model_path,
+            commands::vosk_model_status,
+            commands::vosk_model_set_from_directory,
+            commands::vosk_model_download,
             commands::vosk_start,
             commands::vosk_stop,
             remote_asr_start,
