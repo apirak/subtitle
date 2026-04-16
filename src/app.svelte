@@ -28,6 +28,7 @@
 	let selectedEngine = $state<"browser" | "vosk" | "remote" | "gemini">("browser");
 	let remoteEndpoint = $state("");
 	let remoteModel = $state("");
+	let remoteMinSpeechRms = $state(0.006);
 	let modelPath = $state("");
 	let apiKey = $state("");
 	let translationEngine = $state("remote");
@@ -78,6 +79,7 @@
 					translation_api_key_name: string | null;
 					remote_endpoint: string | null;
 					remote_model: string | null;
+					remote_min_speech_rms: number | null;
 					remote_api_key_name: string | null;
 				}>("settings_get");
 				selectedEngine = settings.engine as "browser" | "vosk" | "remote" | "gemini";
@@ -88,6 +90,7 @@
 				targetLang2 = settings.target_lang_2 || "none";
 				remoteEndpoint = settings.remote_endpoint ?? "";
 				remoteModel = settings.remote_model ?? "";
+				remoteMinSpeechRms = settings.remote_min_speech_rms ?? 0.006;
 				speech.remoteEndpoint = remoteEndpoint;
 				translationEngine = settings.translation_engine;
 				translationEndpoint = settings.translation_endpoint ?? "";
@@ -223,6 +226,11 @@
 		speech.saveSetting("remote_model", nextModel).catch(console.error);
 	}
 
+	function handleRemoteMinSpeechRmsChange(nextValue: number) {
+		remoteMinSpeechRms = nextValue;
+		speech.saveSetting("remote_min_speech_rms", nextValue).catch(console.error);
+	}
+
 	function handleApiKeyChange(nextApiKey: string) {
 		apiKey = nextApiKey;
 		speech.apiKey = nextApiKey;
@@ -345,6 +353,7 @@
 		engine={speech.engine}
 		{remoteEndpoint}
 		remoteModel={remoteModel}
+		remoteMinSpeechRms={remoteMinSpeechRms}
 		{apiKey}
 		{translationEngine}
 		{translationEndpoint}
@@ -360,6 +369,7 @@
 		onEngineChange={handleEngineChange}
 		onRemoteEndpointChange={handleRemoteEndpointChange}
 		onRemoteModelChange={handleRemoteModelChange}
+		onRemoteMinSpeechRmsChange={handleRemoteMinSpeechRmsChange}
 		onApiKeyChange={handleApiKeyChange}
 		onTranslationEngineChange={handleTranslationEngineChange}
 		onTranslationEndpointChange={handleTranslationEndpointChange}

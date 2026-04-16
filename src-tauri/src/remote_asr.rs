@@ -9,7 +9,7 @@ const MAX_RETRIES: u32 = 3;
 const REQUEST_TIMEOUT_SECS: u64 = 30;
 const SILENCE_THRESHOLD: f32 = 0.005;
 const MIN_SPEECH_RMS: f32 = 0.04;
-const MIN_SPEECH_RMS_GEMINI: f32 = 0.007;
+const MIN_SPEECH_RMS_GEMINI: f32 = 0.006;
 const MAX_CHUNK_SAMPLES: usize = 48_000;
 const MIN_SILENCE_FLUSH_SAMPLES_GEMINI: usize = 48_000;
 const SILENCE_WINDOW_SAMPLES: usize = 1024;
@@ -539,6 +539,7 @@ pub async fn remote_asr_start(
     api_key: String,
     source_lang: String,
     model: String,
+    remote_min_speech_rms: Option<f32>,
     engine: String,
 ) -> Result<(), String> {
     // If already running, stop first
@@ -559,7 +560,10 @@ pub async fn remote_asr_start(
 
     let client = reqwest::Client::new();
     let provider = AsrProvider::from_engine(&engine);
-    let min_speech_rms = min_speech_rms_for_provider(provider);
+    let default_min_speech_rms = min_speech_rms_for_provider(provider);
+    let min_speech_rms = remote_min_speech_rms
+        .filter(|v| *v > 0.0 && *v < 1.0)
+        .unwrap_or(default_min_speech_rms);
     let min_silence_flush_samples = min_silence_flush_samples_for_provider(provider);
     let language = Some(source_lang);
     let model = if model.trim().is_empty() {
@@ -574,10 +578,11 @@ pub async fn remote_asr_start(
     let mut chunk_count: u64 = 0;
 
     log::info!(
-        "remote_asr_start: provider={:?}, model={}, min_speech_rms={:.4}, min_silence_flush_samples={}",
+        "remote_asr_start: provider={:?}, model={}, min_speech_rms={:.4} (default={:.4}), min_silence_flush_samples={}",
         provider,
         model,
         min_speech_rms,
+        default_min_speech_rms,
         min_silence_flush_samples
     );
 
@@ -999,7 +1004,7 @@ mod tests {
     fn test_silence_threshold_constant() {
         assert_eq!(SILENCE_THRESHOLD, 0.005);
         assert_eq!(MIN_SPEECH_RMS, 0.04);
-        assert_eq!(MIN_SPEECH_RMS_GEMINI, 0.007);
+        assert_eq!(MIN_SPEECH_RMS_GEMINI, 0.006);
     }
 
     #[test]

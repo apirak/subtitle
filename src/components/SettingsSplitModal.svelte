@@ -26,6 +26,7 @@
 		engine: "browser" | "vosk" | "remote" | "gemini";
 		remoteEndpoint: string;
 		remoteModel: string;
+		remoteMinSpeechRms: number;
 		apiKey: string;
 		translationEngine: string;
 		translationEndpoint: string;
@@ -38,6 +39,7 @@
 		onEngineChange: (engine: "browser" | "vosk" | "remote" | "gemini") => void;
 		onRemoteEndpointChange: (value: string) => void;
 		onRemoteModelChange: (value: string) => void;
+		onRemoteMinSpeechRmsChange: (value: number) => void;
 		onApiKeyChange: (value: string) => void;
 		onTranslationEngineChange: (engine: string) => void;
 		onTranslationEndpointChange: (value: string) => void;
@@ -57,6 +59,7 @@
 		engine,
 		remoteEndpoint,
 		remoteModel,
+		remoteMinSpeechRms,
 		apiKey,
 		translationEngine,
 		translationEndpoint,
@@ -69,6 +72,7 @@
 		onEngineChange,
 		onRemoteEndpointChange,
 		onRemoteModelChange,
+		onRemoteMinSpeechRmsChange,
 		onApiKeyChange,
 		onTranslationEngineChange,
 		onTranslationEndpointChange,
@@ -85,6 +89,7 @@
 	let currentEngine = $state<"browser" | "vosk" | "remote" | "gemini">("browser");
 	let currentRemoteEndpoint = $state("");
 	let currentRemoteModel = $state("");
+	let currentRemoteMinSpeechRms = $state(0.006);
 	let currentApiKey = $state("");
 	let currentTranslationEngine = $state("remote");
 	let currentTranslationEndpoint = $state("");
@@ -161,6 +166,10 @@
 	});
 
 	$effect(() => {
+		currentRemoteMinSpeechRms = remoteMinSpeechRms;
+	});
+
+	$effect(() => {
 		currentApiKey = apiKey;
 	});
 
@@ -228,6 +237,11 @@
 	function handleRemoteModelChange(nextValue: string) {
 		currentRemoteModel = nextValue;
 		onRemoteModelChange(nextValue);
+	}
+
+	function handleRemoteMinSpeechRmsChange(nextValue: number) {
+		currentRemoteMinSpeechRms = nextValue;
+		onRemoteMinSpeechRmsChange(nextValue);
 	}
 
 	function handleApiKeyChange(nextValue: string) {
@@ -441,11 +455,13 @@
 						currentEngine={currentEngine}
 						currentRemoteEndpoint={currentRemoteEndpoint}
 						currentRemoteModel={currentRemoteModel}
+						currentRemoteMinSpeechRms={currentRemoteMinSpeechRms}
 						currentApiKey={currentApiKey}
 						remoteApiKeyHint={remoteApiKeyHint}
 						onEngineChange={handleEngineChange}
 						onRemoteEndpointChange={handleRemoteEndpointChange}
 						onRemoteModelChange={handleRemoteModelChange}
+						onRemoteMinSpeechRmsChange={handleRemoteMinSpeechRmsChange}
 						onApiKeyChange={handleApiKeyChange}
 						isTestingStt={isTestingStt}
 						testSttResolvedUrl={testSttResolvedUrl}

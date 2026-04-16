@@ -71,6 +71,7 @@ pub struct Settings {
     pub translation_api_key_name: Option<String>,
     pub remote_endpoint: Option<String>,
     pub remote_model: Option<String>,
+    pub remote_min_speech_rms: Option<f32>,
     pub remote_api_key_name: Option<String>,
 }
 
@@ -267,6 +268,10 @@ pub async fn settings_get(app: tauri::AppHandle) -> Result<Settings, String> {
         Some(v) => v.as_str().map(String::from),
         None => None,
     };
+    let remote_min_speech_rms = store
+        .get("remote_min_speech_rms")
+        .and_then(|v| v.as_f64())
+        .map(|v| v as f32);
     let remote_api_key_name = match store.get("remote_api_key_name") {
         Some(v) => v.as_str().map(String::from),
         None => None,
@@ -287,6 +292,7 @@ pub async fn settings_get(app: tauri::AppHandle) -> Result<Settings, String> {
         translation_api_key_name,
         remote_endpoint,
         remote_model,
+        remote_min_speech_rms,
         remote_api_key_name,
     })
 }
@@ -312,7 +318,7 @@ pub async fn settings_set(app: tauri::AppHandle, key: String, value: String) -> 
         | "source_language" => {
             store.set(key, serde_json::Value::String(value));
         }
-        "overlay_transparency" => {
+        "overlay_transparency" | "remote_min_speech_rms" => {
             if let Ok(v) = value.parse::<f64>() {
                 let num =
                     serde_json::Number::from_f64(v).unwrap_or_else(|| serde_json::Number::from(0));
@@ -613,6 +619,7 @@ mod tests {
             translation_api_key_name: Some("translation".to_string()),
             remote_endpoint: Some("https://api.openai.com".to_string()),
             remote_model: Some("whisper-1".to_string()),
+            remote_min_speech_rms: Some(0.04),
             remote_api_key_name: Some("openai".to_string()),
         };
 
@@ -638,6 +645,7 @@ mod tests {
         );
         assert_eq!(deserialized.remote_endpoint, settings.remote_endpoint);
         assert_eq!(deserialized.remote_model, settings.remote_model);
+        assert_eq!(deserialized.remote_min_speech_rms, settings.remote_min_speech_rms);
         assert_eq!(
             deserialized.remote_api_key_name,
             settings.remote_api_key_name
@@ -661,6 +669,7 @@ mod tests {
             translation_api_key_name: None,
             remote_endpoint: None,
             remote_model: None,
+            remote_min_speech_rms: None,
             remote_api_key_name: None,
         };
 

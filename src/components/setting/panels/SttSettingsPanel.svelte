@@ -9,11 +9,13 @@
 		currentEngine: "browser" | "vosk" | "remote" | "gemini";
 		currentRemoteEndpoint: string;
 		currentRemoteModel: string;
+		currentRemoteMinSpeechRms: number;
 		currentApiKey: string;
 		remoteApiKeyHint: string;
 		onEngineChange: (engine: "browser" | "vosk" | "remote" | "gemini") => void;
 		onRemoteEndpointChange: (value: string) => void;
 		onRemoteModelChange: (value: string) => void;
+		onRemoteMinSpeechRmsChange: (value: number) => void;
 		onApiKeyChange: (value: string) => void;
 		isTestingStt: boolean;
 		testSttResolvedUrl: string;
@@ -27,11 +29,13 @@
 		currentEngine,
 		currentRemoteEndpoint,
 		currentRemoteModel,
+		currentRemoteMinSpeechRms,
 		currentApiKey,
 		remoteApiKeyHint,
 		onEngineChange,
 		onRemoteEndpointChange,
 		onRemoteModelChange,
+		onRemoteMinSpeechRmsChange,
 		onApiKeyChange,
 		isTestingStt,
 		testSttResolvedUrl,
@@ -98,6 +102,29 @@
 				value={currentRemoteModel}
 				oninput={(event) => onRemoteModelChange((event.target as HTMLInputElement).value)}
 			/>
+		</div>
+
+		<div class="mb-5">
+			<label class="settings-field-label" for="split-remote-min-rms">Speech RMS Threshold</label>
+			<input
+				id="split-remote-min-rms"
+				type="number"
+				class="settings-input"
+				min="0"
+				max="1"
+				step="0.001"
+				value={currentRemoteMinSpeechRms}
+				oninput={(event) => {
+					const raw = (event.target as HTMLInputElement).value;
+					const parsed = Number(raw);
+					if (Number.isFinite(parsed) && parsed > 0 && parsed < 1) {
+						onRemoteMinSpeechRmsChange(parsed);
+					}
+				}}
+			/>
+			<div class="settings-key-hint">
+				Lower value is more sensitive (captures quieter speech). Suggested: 0.006-0.02.
+			</div>
 		</div>
 
 		<div>
