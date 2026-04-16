@@ -14,47 +14,38 @@
 
 ```mermaid
 flowchart TD
-    A[Mic Input] --> D{Selected Engine}
+    Start[Mic Input] --> Pick{Engine}
 
-    D -->|Vosk / Gemini / OpenAI-compatible| B[CPAL Capture 48k F32]
-    B --> C[Resample 16k Mono]
+    Pick -->|Browser| B1[Web Speech API]
+    B1 --> B2[Browser VAD and segmentation]
+    B2 --> B3[Interim and final text]
+    B3 --> UI[Subtitle UI]
 
-    %% Browser path
-    D -->|Browser| E1[Web Speech API (direct mic path)]
-    E1 --> E2[Browser internal VAD + segmentation]
-    E2 --> E3[Interim/Final events in webview]
-    E3 --> UI[Subtitle UI]
+    Pick -->|Vosk| V0[Rust capture]
+    V0 --> V1[Resample 16k mono]
+    V1 --> V2[Vosk recognition]
+    V2 --> V3[Emit subtitle events]
+    V3 --> UI
 
-    %% Vosk path
-    D -->|Vosk| V1[Vosk recognizer loop]
-    V1 --> V2[backend://subtitle/update + final]
-    V2 --> UI
+    Pick -->|Gemini or OpenAI| R0[Rust capture]
+    R0 --> R1[Resample 16k mono]
+    R1 --> R2[Buffer audio]
+    R2 --> R3{Flush now}
+    R3 -->|No| R2
+    R3 -->|Yes| R4{RMS pass}
+    R4 -->|No| D1[Drop chunk]
+    R4 -->|Yes| W1[Encode WAV]
 
-    %% Remote family preprocessing
-    D -->|Gemini / OpenAI-compatible| R0[Buffer samples]
-    R0 --> R1[Silence window RMS check]
-    R1 --> R2{Flush trigger?}
-    R2 -->|silence duration met| R3[Silence flush]
-    R2 -->|buffer >= 3s| R4[Max chunk flush]
+    W1 --> P1{Provider}
+    P1 -->|Gemini| G1[POST generateContent]
+    G1 --> G2[Parse text]
+    G2 --> G3[Emit subtitle]
+    G3 --> UI
 
-    R3 --> GATE{RMS >= min_speech_rms ?}
-    R4 --> GATE
-
-    GATE -->|No| DROP[Drop chunk]
-    GATE -->|Yes| WAV[Encode WAV]
-
-    %% Gemini batch
-    WAV --> P{Provider}
-    P -->|Gemini| G1[POST models/...:generateContent]
-    G1 --> G2[Parse candidates.parts.text]
-    G2 --> EMIT[Emit subtitle event]
-
-    %% OpenAI-compatible
-    P -->|OpenAI-compatible| O1[POST /v1/audio/transcriptions]
-    O1 --> O2[Parse text + optional confidence filter]
-    O2 --> EMIT
-
-    EMIT --> UI
+    P1 -->|OpenAI compatible| O1[POST audio transcriptions]
+    O1 --> O2[Parse text]
+    O2 --> O3[Emit subtitle]
+    O3 --> UI
 ```
 
 ## พฤติกรรมแต่ละ Engine
@@ -88,8 +79,22 @@ flowchart TD
 - silence duration: 300ms
 - Gemini default min_speech_rms: 0.006 (ไวขึ้นสำหรับไมค์ที่สัญญาณเบา)
 - OpenAI-compatible default min_speech_rms: 0.04
+- Gemini min silence flush samples: 48000 (ประมาณ 3 วินาที)
 
 หมายเหตุ: สามารถ override ค่า min_speech_rms ผ่าน Settings ใน UI ได้แล้ว โดยค่าจะถูก persist ลง settings store
+
+## การตั้งค่า RMS ผ่าน UI (Live Tuning)
+
+- เมนู: Settings -> Speech To Text
+- ฟิลด์: Speech RMS Threshold
+- ช่วงค่าที่แนะนำ: 0.006 ถึง 0.020
+- ค่านี้ถูกบันทึกใน settings key: remote_min_speech_rms
+- เมื่อกด Start รอบใหม่ ระบบจะอ่านค่าแล้วใช้แทนค่า default ของ provider
+
+ข้อควรระวัง
+
+- ค่าต่ำเกินไปอาจติดเสียงรบกวนและ false positives
+- ค่าสูงเกินไปอาจทำให้ไม่ส่ง chunk ไป STT (เห็น log ว่า skipping below threshold)
 
 ## แนวทางจูนค่า
 
@@ -111,3 +116,11 @@ flowchart TD
 - send_gemini_batch_transcription: extracted text ...
 
 ถ้าเห็น max chunk แต่ตามด้วย skipping ตลอด แปลว่าต้องลด threshold หรือเพิ่ม gain ไมค์
+
+## โค้ดอ้างอิงสำคัญ
+
+- Browser ไม่ใช้ Rust capture: src/lib/speech.svelte.ts
+- Rust audio capture entrypoint: src-tauri/src/audio.rs
+- Remote/Gemini chunking + RMS gate: src-tauri/src/remote_asr.rs
+- Settings schema/persistence: src-tauri/src/commands.rs
+- Settings UI panel: src/components/setting/panels/SttSettingsPanel.svelte
